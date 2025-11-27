@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { useAuth } from "../../contexts/AuthContext";
-import { getStudentCourses } from "../../services/courseService";
-import { collectCourseIdsForStudent } from "../../utils/helpers";
 
-const StudentQRPass = ({ courseId }) => {
+const StudentQRPass = () => {
   const { user } = useAuth();
   const [qrImage, setQrImage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -43,20 +41,8 @@ const StudentQRPass = ({ courseId }) => {
       }
 
       try {
-        let courses = [];
-
-        try {
-          const fetched = await getStudentCourses(studentId);
-          courses = Array.isArray(fetched) ? fetched : [];
-        } catch (fetchError) {
-          console.error("Failed to load courses for student QR", fetchError);
-        }
-
-        const courseIds = collectCourseIdsForStudent(courses, courseId);
-
         const payload = {
           studentId: String(studentId),
-          courseIds,
         };
 
         const data = await QRCode.toDataURL(JSON.stringify(payload));
@@ -85,7 +71,7 @@ const StudentQRPass = ({ courseId }) => {
     return () => {
       cancelled = true;
     };
-  }, [courseId, studentId]);
+  }, [studentId]);
 
   return (
     <div className="flex flex-col items-center space-y-4 p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
