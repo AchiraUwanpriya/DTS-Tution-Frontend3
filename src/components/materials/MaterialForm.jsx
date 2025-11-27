@@ -3,7 +3,10 @@ import { useAuth } from "../../contexts/AuthContext";
 import Button from "../common/Button";
 import { useState, useEffect } from "react";
 import { uploadMaterial } from "../../services/materialService";
-import { getTeacherCourses } from "../../services/courseService";
+import {
+  getTeacherCourses,
+  getCourseDetails,
+} from "../../services/courseService";
 
 const resolveTeacherId = (user) => {
   if (!user || typeof user !== "object") {
@@ -36,6 +39,10 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
   const [courses, setCourses] = useState([]);
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(courseId ?? null);
+
+  const [subjects, setSubjects] = useState([]); // NEW
+  const [loadingSubjects, setLoadingSubjects] = useState(false); // NEW
+  const [selectedSubject, setSelectedSubject] = useState(""); // NEW
 
   useEffect(() => {
     let mounted = true;
@@ -77,6 +84,50 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, user]);
+
+  // Load subjects when course changes
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSubjects = async () => {
+      const courseToUse = courseId ?? selectedCourse;
+      if (!courseToUse) {
+        setSubjects([]);
+        setSelectedSubject("");
+        return;
+      }
+
+      try {
+        setLoadingSubjects(true);
+        const courseDetails = await getCourseDetails(courseToUse);
+        if (!mounted) return;
+
+        const ids = courseDetails.subjectIds ?? courseDetails.SubjectIDs ?? [];
+        const names = courseDetails.subjects ?? [];
+
+        const courseSubjects = ids.map((id, index) => ({
+          id,
+          name: names[index] ?? `Class ${id}`,
+        }));
+
+        setSubjects(courseSubjects);
+
+        setSelectedSubject("");
+      } catch (err) {
+        console.error("Failed to load subjects for course", err);
+        setSubjects([]);
+        setSelectedSubject("");
+      } finally {
+        if (mounted) setLoadingSubjects(false);
+      }
+    };
+
+    loadSubjects();
+
+    return () => {
+      mounted = false;
+    };
+  }, [courseId, selectedCourse]);
 
   const onSubmit = async (data) => {
     if (!file) {
@@ -264,6 +315,42 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
           {...register("description")}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
+      </div>
+
+      <div className="space-y-3">
+        <label
+          htmlFor="classes"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          Classes
+        </label>
+        {loadingSubjects ? (
+          <p className="mt-1 text-sm text-gray-500">Loading classes…</p>
+        ) : subjects && subjects.length ? (
+          <select
+            id="classes"
+            value={selectedSubject ?? ""}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          >
+            <option value="">-- Select a class --</option>
+            {subjects.map((subject) => {
+              console.log("Subject:", subject); // { id: 8060, name: "Networking" }
+              const subjectId = String(subject.id);
+              const subjectLabel = subject.name;
+
+              return (
+                <option key={subjectId} value={subjectId}>
+                  {subjectLabel}
+                </option>
+              );
+            })}
+          </select>
+        ) : (
+          <p className="mt-1 text-sm text-gray-500">
+            No classes found for this course.
+          </p>
+        )}
       </div>
 
       <div>
