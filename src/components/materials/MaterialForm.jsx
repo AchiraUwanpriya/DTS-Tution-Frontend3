@@ -295,7 +295,7 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
           id="title"
           type="text"
           {...register("title", { required: "Title is required" })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         {errors.title && (
           <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
@@ -331,7 +331,7 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
             id="classes"
             value={selectedSubject ?? ""}
             onChange={(e) => setSelectedSubject(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
           >
             <option value="">-- Select a class --</option>
             {subjects.map((subject) => {
