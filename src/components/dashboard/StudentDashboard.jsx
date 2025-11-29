@@ -1,10 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { getStudentAttendance } from "../../services/attendanceService";
 import { getStudentMaterials } from "../../services/materialService";
 import { getStudentCourses } from "../../services/courseService";
-import AttendanceCard from "../attendance/AttendanceCard";
-import MaterialCard from "../materials/MaterialCard";
 import AnnouncementList from "../announcements/AnnouncementList";
 import { getAnnouncementsForStudent } from "../../services/announcementService";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -14,7 +12,7 @@ import StatsCard from "../common/StatsCard";
 import EmptyState from "../common/EmptyState";
 import { formatDate, getFileType } from "../../utils/helpers";
 import { getAllClassSchedules } from "../../services/classScheduleService";
-import { FaBookOpen, FaCalendarAlt, FaBan } from "react-icons/fa";
+import { FaBookOpen, FaCalendarAlt, FaBan, FaBell } from "react-icons/fa";
 
 const resolveStudentIdentifiers = (user) => {
   if (!user || typeof user !== "object") {
@@ -44,45 +42,6 @@ const resolveStudentIdentifiers = (user) => {
     studentId: studentId ?? userId,
     userId,
   };
-};
-
-const PieChart = ({
-  percent = 90,
-  size = 120,
-  colors = ["#8B0000", "#28a745"],
-}) => {
-  const stroke = 40;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - percent / 100);
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <g transform={`translate(${size / 2}, ${size / 2})`}>
-        <circle
-          r={radius}
-          fill="none"
-          stroke={colors[0]}
-          strokeWidth={stroke}
-          strokeDasharray={circumference}
-          strokeDashoffset={0}
-        />
-        <circle
-          r={radius}
-          fill="none"
-          stroke={colors[1]}
-          strokeWidth={stroke}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="butt"
-          transform={`rotate(-90)`}
-        />
-        <text x="0" y="6" textAnchor="middle" fontSize="16" fill="#fff">
-          {percent}%
-        </text>
-      </g>
-    </svg>
-  );
 };
 
 const StudentDashboard = () => {
@@ -213,29 +172,139 @@ const StudentDashboard = () => {
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [showSearch, showOptions]);
 
+  const {
+    summary: announcementSummary,
+    total: totalAnnouncementsForEnrolledCourses,
+  } = useMemo(() => {
+    // Group announcements by course to highlight counts for the student's classes.
+    const normalizeId = (value) => {
+      if (value === undefined || value === null) {
+        return null;
+      }
+      const str = String(value).trim();
+      return str.length ? str : null;
+    };
+
+    const courseNameById = new Map();
+    (Array.isArray(courses) ? courses : []).forEach((course) => {
+      const idCandidates = [
+        course?.id,
+        course?.ID,
+        course?.courseId,
+        course?.courseID,
+        course?.CourseID,
+        course?.CourseId,
+      ];
+      const normalizedId = idCandidates
+        .map((candidate) => normalizeId(candidate))
+        .find(Boolean);
+
+      if (!normalizedId) {
+        return;
+      }
+
+      const labelCandidates = [
+        course?.name,
+        course?.Name,
+        course?.courseName,
+        course?.CourseName,
+        course?.title,
+        course?.Title,
+        course?.code ? `${course.code}` : null,
+      ];
+
+      const label =
+        labelCandidates.find(
+          (candidate) => typeof candidate === "string" && candidate.trim()
+        ) || `Course ${normalizedId}`;
+
+      courseNameById.set(normalizedId, label.trim());
+    });
+
+    const announcementCourseMap = new Map();
+    (Array.isArray(announcements) ? announcements : []).forEach(
+      (announcement) => {
+        const idCandidates = [
+          announcement?.courseId,
+          announcement?.CourseID,
+          announcement?.courseID,
+          announcement?.CourseId,
+          announcement?.course?.id,
+          announcement?.course?.courseId,
+          announcement?.Course?.ID,
+        ];
+
+        const courseId = idCandidates
+          .map((candidate) => normalizeId(candidate))
+          .find(Boolean);
+
+        if (!courseId) {
+          return;
+        }
+
+        if (!announcementCourseMap.has(courseId)) {
+          const labelFallback =
+            courseNameById.get(courseId) ||
+            [
+              announcement?.courseName,
+              announcement?.CourseName,
+              announcement?.course?.name,
+              announcement?.Course?.Name,
+              announcement?.title,
+            ].find(
+              (candidate) =>
+                typeof candidate === "string" && candidate.trim().length
+            ) ||
+            `Course ${courseId}`;
+
+          announcementCourseMap.set(courseId, {
+            count: 0,
+            label: labelFallback.trim(),
+          });
+        }
+
+        const entry = announcementCourseMap.get(courseId);
+        entry.count += 1;
+      }
+    );
+
+    const summary = [];
+
+    courseNameById.forEach((label, id) => {
+      const entry = announcementCourseMap.get(id);
+      summary.push({
+        key: id,
+        label,
+        count: entry ? entry.count : 0,
+      });
+      if (entry) {
+        announcementCourseMap.delete(id);
+      }
+    });
+
+    announcementCourseMap.forEach(({ count, label }, id) => {
+      summary.push({
+        key: id,
+        label,
+        count,
+      });
+    });
+
+    summary.sort((a, b) => {
+      if (b.count !== a.count) {
+        return b.count - a.count;
+      }
+      return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+    });
+
+    const total = summary.reduce((acc, entry) => acc + entry.count, 0);
+
+    return { summary, total };
+  }, [courses, announcements]);
+
   if (loading) return <Loader className="py-12" />;
 
-  const uniqueCourseIds = new Set();
-  const addCourseId = (value) => {
-    if (value === undefined || value === null || value === "") {
-      return;
-    }
-    uniqueCourseIds.add(String(value));
-  };
-
-  attendance.forEach((record) =>
-    addCourseId(record.courseId ?? record.CourseID)
-  );
-  materials.forEach((material) =>
-    addCourseId(material.courseId ?? material.CourseID)
-  );
-  announcements.forEach((announcement) =>
-    addCourseId(announcement.courseId ?? announcement.CourseID)
-  );
-
-  const totalSubjects = uniqueCourseIds.size;
   const totalCourses = Array.isArray(courses) ? courses.length : 0;
-  const totalAssignments = materials.length;
   // Determine scheduled classes (courses that have a schedule and belong to the student)
   const studentCourseIds = new Set(
     (courses || [])
@@ -253,18 +322,6 @@ const StudentDashboard = () => {
   );
 
   const scheduledClassesCount = scheduledCourseIds.size;
-  const presentCount = attendance.reduce((count, record) => {
-    const status = (record.status ?? record.Status ?? "")
-      .toString()
-      .toLowerCase();
-    return status === "present" ? count + 1 : count;
-  }, 0);
-  const attendanceRate = attendance.length
-    ? Math.min(
-        100,
-        Math.max(0, Math.round((presentCount / attendance.length) * 100))
-      )
-    : 0;
 
   // Prepare announcements list based on search + sort
   const filteredAnnouncements = (announcements || [])
@@ -305,16 +362,18 @@ const StudentDashboard = () => {
           value={scheduledClassesCount}
         />
 
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 flex items-center justify-center transition-base hover-lift soft-shadow">
-          <div className="flex items-center space-x-6">
-            <div>
-              <PieChart percent={attendanceRate} />
+        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover-lift soft-shadow animated-card">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-medium text-gray-500 dark:text-gray-300">
+              Class announcements
             </div>
-            <div>
-              <div className="text-sm text-gray-500">Attendance Rate</div>
-              <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-                {attendanceRate}%
-              </div>
+            <div className="text-2xl">
+              <FaBell size={28} className="text-blue-500" />
+            </div>
+          </div>
+          <div className="mt-6">
+            <div className="text-3xl font-semibold text-indigo-600 dark:text-indigo-400">
+              {totalAnnouncementsForEnrolledCourses}
             </div>
           </div>
         </div>
