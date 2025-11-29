@@ -372,10 +372,7 @@ export const getCourseMaterialsAll = async (courseId) => {
 
   if (!resolvedId) return [];
   // Try explicit "all" endpoint first (server should implement /course/{id}/all)
-  const candidateEndpoints = [
-    `${RESOURCE_BASE}/course/${resolvedId}/all`,
-    `${RESOURCE_BASE}/course/${resolvedId}`,
-  ];
+  const candidateEndpoints = [`${RESOURCE_BASE}/course/${resolvedId}`];
 
   for (const endpoint of candidateEndpoints) {
     try {
