@@ -29,6 +29,7 @@ import Modal from "../common/Modal2";
 
 import StudentPickerModal from "../common/StudentPickerModal";
 import CourseForm from "./CourseForm";
+import ClassStatsPanel from "./ClassStatsPanel";
 import MaterialForm from "../materials/MaterialForm";
 import QRGenerator from "../attendance/QRGenerator";
 import Loader from "../common/Loader";
@@ -110,6 +111,8 @@ const CourseView = () => {
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState("success");
   const [showAlert, setShowAlert] = useState(false);
+  const [selectedClassKey, setSelectedClassKey] = useState(null);
+  const [isClassStatsOpen, setIsClassStatsOpen] = useState(false);
 
   // Ref for student menu wrapper to detect outside clicks
   const studentMenuRef = useRef(null);
@@ -1008,7 +1011,7 @@ const CourseView = () => {
     };
   }, [course?.teacherId]);
 
-  const resolveStudentId = (candidate) => {
+  const resolveStudentId = useCallback((candidate) => {
     if (!candidate || typeof candidate !== "object") {
       return "";
     }
@@ -1030,7 +1033,7 @@ const CourseView = () => {
     }
 
     return "";
-  };
+  }, []);
 
   const getStudentDetailsPath = (student) => {
     const identifier = resolveStudentId(student);
@@ -1511,6 +1514,837 @@ const CourseView = () => {
     subjectStudentGroups,
     courseSubjectOptionMap,
   ]);
+
+  const attendanceByStudent = useMemo(() => {
+    const map = new Map();
+    if (!Array.isArray(attendance)) {
+      return map;
+    }
+
+    attendance.forEach((record) => {
+      if (!record || typeof record !== "object") {
+        return;
+      }
+
+      const rawRecord =
+        record.raw && typeof record.raw === "object" ? record.raw : null;
+
+      const idCandidates = [
+        record.StudentID,
+        record.studentID,
+        record.studentId,
+        rawRecord?.StudentID,
+        rawRecord?.studentID,
+        rawRecord?.studentId,
+      ];
+
+      let resolvedId = null;
+      for (const candidate of idCandidates) {
+        const normalized = normalizeIdString(candidate);
+        if (normalized) {
+          resolvedId = normalized;
+          break;
+        }
+      }
+
+      if (!resolvedId) {
+        return;
+      }
+
+      if (!map.has(resolvedId)) {
+        map.set(resolvedId, []);
+      }
+
+      map.get(resolvedId).push(record);
+    });
+
+    map.forEach((records) => {
+      records.sort((a, b) => {
+        const parseDate = (value) => {
+          if (!value) {
+            return 0;
+          }
+          const date = new Date(value);
+          return Number.isFinite(date.getTime()) ? date.getTime() : 0;
+        };
+
+        const bTime = parseDate(b.date ?? b.Date);
+        const aTime = parseDate(a.date ?? a.Date);
+        return bTime - aTime;
+      });
+    });
+
+    return map;
+  }, [attendance, normalizeIdString]);
+
+  const getAttendanceSubjectHints = useCallback(
+    (record) => {
+      const ids = new Set();
+      const names = new Set();
+
+      if (!record || typeof record !== "object") {
+        return { ids, names };
+      }
+
+      const addId = (candidate) => {
+        if (candidate === undefined || candidate === null) {
+          return;
+        }
+        if (Array.isArray(candidate)) {
+          candidate.forEach(addId);
+          return;
+        }
+        if (typeof candidate === "object") {
+          addId(
+            candidate.SubjectID ??
+              candidate.subjectID ??
+              candidate.subjectId ??
+              candidate.id ??
+              candidate.Id
+          );
+          return;
+        }
+        const normalized = normalizeIdString(candidate);
+        if (normalized) {
+          ids.add(normalized);
+        }
+      };
+
+      const addName = (candidate) => {
+        if (!candidate) {
+          return;
+        }
+        if (Array.isArray(candidate)) {
+          candidate.forEach(addName);
+          return;
+        }
+        if (typeof candidate === "object") {
+          addName(
+            candidate.SubjectName ??
+              candidate.subjectName ??
+              candidate.Name ??
+              candidate.name ??
+              candidate.Title ??
+              candidate.title
+          );
+          return;
+        }
+        if (typeof candidate === "string") {
+          const trimmed = candidate.trim().toLowerCase();
+          if (trimmed) {
+            names.add(trimmed);
+          }
+        }
+      };
+
+      const rawRecord =
+        record.raw && typeof record.raw === "object" ? record.raw : null;
+      const sessionRecord =
+        record.session && typeof record.session === "object"
+          ? record.session
+          : null;
+
+      const idCandidates = [
+        record.SubjectID,
+        record.subjectID,
+        record.subjectId,
+        record.CourseSubjectID,
+        record.courseSubjectID,
+        record.CourseSubjectId,
+        record.courseSubjectId,
+        record.SubjectIDs,
+        record.subjectIDs,
+        record.SubjectIds,
+        record.subjectIds,
+      ];
+
+      const nameCandidates = [
+        record.SubjectName,
+        record.subjectName,
+        record.CourseSubjectName,
+        record.courseSubjectName,
+      ];
+
+      if (rawRecord) {
+        idCandidates.push(
+          rawRecord.SubjectID,
+          rawRecord.subjectID,
+          rawRecord.subjectId,
+          rawRecord.SubjectIds,
+          rawRecord.subjectIds,
+          rawRecord.SubjectIDs,
+          rawRecord.subjectIDs,
+          rawRecord.CourseSubjectID,
+          rawRecord.courseSubjectID,
+          rawRecord.CourseSubjectIds,
+          rawRecord.courseSubjectIds,
+          rawRecord.CourseSubjectIDs,
+          rawRecord.courseSubjectIDs
+        );
+
+        nameCandidates.push(
+          rawRecord.SubjectName,
+          rawRecord.subjectName,
+          rawRecord.CourseSubjectName,
+          rawRecord.courseSubjectName
+        );
+
+        const rawSubject =
+          rawRecord.Subject ||
+          rawRecord.subject ||
+          rawRecord.CourseSubject ||
+          rawRecord.courseSubject ||
+          null;
+
+        if (rawSubject && typeof rawSubject === "object") {
+          idCandidates.push(
+            rawSubject.SubjectID,
+            rawSubject.subjectID,
+            rawSubject.subjectId,
+            rawSubject.id,
+            rawSubject.Id
+          );
+          nameCandidates.push(
+            rawSubject.SubjectName,
+            rawSubject.subjectName,
+            rawSubject.Name,
+            rawSubject.name,
+            rawSubject.Title,
+            rawSubject.title
+          );
+        }
+      }
+
+      if (sessionRecord) {
+        idCandidates.push(
+          sessionRecord.SubjectID,
+          sessionRecord.subjectID,
+          sessionRecord.subjectId,
+          sessionRecord.CourseSubjectID,
+          sessionRecord.courseSubjectID,
+          sessionRecord.CourseSubjectId,
+          sessionRecord.courseSubjectId
+        );
+
+        nameCandidates.push(
+          sessionRecord.SubjectName,
+          sessionRecord.subjectName,
+          sessionRecord.CourseSubjectName,
+          sessionRecord.courseSubjectName
+        );
+
+        const sessionSubject =
+          sessionRecord.Subject || sessionRecord.subject || null;
+        if (sessionSubject && typeof sessionSubject === "object") {
+          idCandidates.push(
+            sessionSubject.SubjectID,
+            sessionSubject.subjectID,
+            sessionSubject.subjectId,
+            sessionSubject.id,
+            sessionSubject.Id
+          );
+          nameCandidates.push(
+            sessionSubject.SubjectName,
+            sessionSubject.subjectName,
+            sessionSubject.Name,
+            sessionSubject.name,
+            sessionSubject.Title,
+            sessionSubject.title
+          );
+        }
+      }
+
+      idCandidates.forEach(addId);
+      nameCandidates.forEach(addName);
+
+      return { ids, names };
+    },
+    [normalizeIdString]
+  );
+
+  const getStudentDisplayName = useCallback(
+    (student) => {
+      if (!student || typeof student !== "object") {
+        return "Unnamed student";
+      }
+
+      const findName = (candidates = []) =>
+        candidates.find(
+          (value) => typeof value === "string" && value.trim().length
+        );
+
+      const first =
+        findName([
+          student.FirstName,
+          student.firstName,
+          student.GivenName,
+          student.givenName,
+          student?.Student?.FirstName,
+          student?.Student?.firstName,
+          student?.StudentDetails?.FirstName,
+          student?.StudentDetails?.firstName,
+        ]) || "";
+
+      const last =
+        findName([
+          student.LastName,
+          student.lastName,
+          student.Surname,
+          student.surname,
+          student?.Student?.LastName,
+          student?.Student?.lastName,
+          student?.StudentDetails?.LastName,
+          student?.StudentDetails?.lastName,
+        ]) || "";
+
+      const combined = `${first} ${last}`.replace(/\s+/g, " ").trim();
+      if (combined) {
+        return combined;
+      }
+
+      const fallback =
+        findName([
+          student.FullName,
+          student.fullName,
+          student.Name,
+          student.name,
+          student?.Student?.FullName,
+          student?.Student?.fullName,
+          student?.Student?.Name,
+          student?.Student?.name,
+        ]) || "";
+
+      if (fallback.trim()) {
+        return fallback.trim();
+      }
+
+      const email =
+        findName([
+          student.Email,
+          student.email,
+          student?.Student?.Email,
+          student?.Student?.email,
+        ]) || "";
+
+      if (email.trim()) {
+        return email.trim();
+      }
+
+      const studentId = resolveStudentId(student);
+      if (studentId) {
+        return `Student ${studentId}`;
+      }
+
+      return "Unnamed student";
+    },
+    [resolveStudentId]
+  );
+
+  const classStatsEntries = useMemo(() => {
+    const courseSubjectNames = Array.isArray(course?.subjects)
+      ? course.subjects
+      : [];
+
+    const buildSubjectMeta = (group, index) => {
+      const subjectIdCandidates = [
+        group.subjectId,
+        group.SubjectID,
+        group.SubjectId,
+        group.id,
+        group.Id,
+      ];
+
+      let subjectIdNormalized = null;
+      for (const candidate of subjectIdCandidates) {
+        const normalized = normalizeIdString(candidate);
+        if (normalized) {
+          subjectIdNormalized = normalized;
+          break;
+        }
+      }
+
+      const option =
+        subjectIdNormalized && courseSubjectOptionMap.has(subjectIdNormalized)
+          ? courseSubjectOptionMap.get(subjectIdNormalized)
+          : null;
+
+      const fallbackName =
+        courseSubjectNames[index] ?? option?.label ?? group.displayName ?? null;
+
+      const subjectLabel =
+        (group.subjectName ?? group.SubjectName ?? fallbackName ?? "").trim() ||
+        (subjectIdNormalized
+          ? `Class ${subjectIdNormalized}`
+          : `Class ${index + 1}`);
+
+      const subjectCode = (
+        group.subjectCode ??
+        group.SubjectCode ??
+        option?.code ??
+        ""
+      ).trim();
+
+      const entryKey = subjectIdNormalized ?? `subject-${index}`;
+
+      return { subjectIdNormalized, subjectLabel, subjectCode, entryKey };
+    };
+
+    const resolveStatusInfo = (record) => {
+      const candidates = [
+        record?.status,
+        record?.Status,
+        record?.attendanceStatus,
+        record?.AttendanceStatus,
+        record?.raw?.Status,
+        record?.raw?.status,
+      ];
+
+      for (const candidate of candidates) {
+        if (typeof candidate === "string" && candidate.trim()) {
+          const label = candidate.trim();
+          return { statusLabel: label, statusKey: label.toLowerCase() };
+        }
+      }
+
+      return { statusLabel: "No record", statusKey: "no-record" };
+    };
+
+    const resolveRecordDate = (record) => {
+      const candidates = [
+        record?.date,
+        record?.Date,
+        record?.attendanceDate,
+        record?.AttendanceDate,
+        record?.session?.SessionDate,
+        record?.session?.sessionDate,
+        record?.raw?.SessionDate,
+        record?.raw?.sessionDate,
+        record?.raw?.date,
+        record?.raw?.Date,
+      ];
+
+      for (const candidate of candidates) {
+        if (!candidate) {
+          continue;
+        }
+        const asDate = new Date(candidate);
+        if (Number.isFinite(asDate.getTime())) {
+          return asDate.toISOString();
+        }
+      }
+
+      return null;
+    };
+
+    const summarizeRecords = (records, entryKey) => {
+      if (!Array.isArray(records) || !records.length) {
+        return {
+          summaries: [],
+          presentCount: 0,
+          latestAttendanceDate: null,
+        };
+      }
+
+      const summaries = [];
+      let presentCount = 0;
+      let latestAttendanceDate = null;
+
+      records.forEach((record, recordIndex) => {
+        const { statusLabel, statusKey } = resolveStatusInfo(record);
+        if (statusKey === "present" || statusKey === "late") {
+          presentCount += 1;
+        }
+
+        const recordDate = resolveRecordDate(record);
+        if (recordDate) {
+          const timestamp = new Date(recordDate).getTime();
+          if (Number.isFinite(timestamp)) {
+            if (!latestAttendanceDate) {
+              latestAttendanceDate = new Date(timestamp).toISOString();
+            } else {
+              const current = new Date(latestAttendanceDate).getTime();
+              if (timestamp > current) {
+                latestAttendanceDate = new Date(timestamp).toISOString();
+              }
+            }
+          }
+        }
+
+        summaries.push({
+          id:
+            record?.id ??
+            record?.AttendanceID ??
+            record?.attendanceId ??
+            `${entryKey}-record-${recordIndex}`,
+          title:
+            record?.session?.Name ??
+            record?.session?.name ??
+            record?.session?.Title ??
+            record?.session?.title ??
+            record?.raw?.SessionName ??
+            record?.raw?.sessionName ??
+            `Session ${recordIndex + 1}`,
+          date: recordDate,
+          statusLabel,
+          statusKey,
+        });
+      });
+
+      return { summaries, presentCount, latestAttendanceDate };
+    };
+
+    if (isStudentUser) {
+      const studentIds = studentIdentifierValues
+        .map((value) => normalizeIdString(value))
+        .filter(Boolean);
+      const studentIdSet = new Set(studentIds);
+
+      if (!studentIds.length) {
+        return [];
+      }
+
+      const gatherRecordsForSubject = (
+        subjectIdNormalized,
+        subjectLabelLower
+      ) => {
+        const recordMap = new Map();
+
+        studentIds.forEach((studentId) => {
+          const records = attendanceByStudent.get(studentId);
+          if (!Array.isArray(records)) {
+            return;
+          }
+
+          records.forEach((record) => {
+            const hints = getAttendanceSubjectHints(record);
+            if (subjectIdNormalized && hints.ids.size) {
+              if (!hints.ids.has(subjectIdNormalized)) {
+                return;
+              }
+            } else if (subjectLabelLower && hints.names.size) {
+              if (!hints.names.has(subjectLabelLower)) {
+                return;
+              }
+            } else if (subjectIdNormalized || subjectLabelLower) {
+              return;
+            }
+
+            const key =
+              record?.id ??
+              record?.AttendanceID ??
+              record?.attendanceId ??
+              `${subjectIdNormalized || subjectLabelLower || "record"}-${
+                recordMap.size
+              }`;
+            if (!recordMap.has(key)) {
+              recordMap.set(key, record);
+            }
+          });
+        });
+
+        return Array.from(recordMap.values());
+      };
+
+      const entryMap = new Map();
+
+      if (
+        Array.isArray(subjectGroupsWithStatus) &&
+        subjectGroupsWithStatus.length
+      ) {
+        subjectGroupsWithStatus.forEach((group, index) => {
+          const groupStudents = Array.isArray(group.students)
+            ? group.students
+            : [];
+          const matchedStudent = groupStudents.find((candidate) => {
+            const candidateId = normalizeIdString(resolveStudentId(candidate));
+            return candidateId && studentIdSet.has(candidateId);
+          });
+
+          if (!matchedStudent) {
+            return;
+          }
+
+          const { subjectIdNormalized, subjectLabel, subjectCode, entryKey } =
+            buildSubjectMeta(group, index);
+
+          const labelLower = subjectLabel.trim().toLowerCase();
+          const recordsForSubject = gatherRecordsForSubject(
+            subjectIdNormalized,
+            labelLower
+          );
+
+          const { summaries, presentCount, latestAttendanceDate } =
+            summarizeRecords(recordsForSubject, entryKey);
+
+          const totalSessions = summaries.length;
+          const absentCount = Math.max(0, totalSessions - presentCount);
+
+          entryMap.set(entryKey, {
+            key: entryKey,
+            subjectId: subjectIdNormalized,
+            label: subjectLabel,
+            code: subjectCode,
+            total: totalSessions,
+            present: presentCount,
+            absent: absentCount,
+            students: [],
+            records: summaries,
+            latestAttendanceDate,
+          });
+        });
+      }
+
+      const ensureEntryForLabel = (label, identifier, index) => {
+        const trimmedLabel = (label || "").trim();
+        if (!trimmedLabel) {
+          return;
+        }
+
+        const labelLower = trimmedLabel.toLowerCase();
+        const existing = Array.from(entryMap.values()).find(
+          (entry) => entry.label.toLowerCase() === labelLower
+        );
+        if (existing) {
+          return;
+        }
+
+        const recordsForSubject = gatherRecordsForSubject(null, labelLower);
+        const { summaries, presentCount, latestAttendanceDate } =
+          summarizeRecords(recordsForSubject, `student-class-${index}`);
+
+        const totalSessions = summaries.length;
+        const absentCount = Math.max(0, totalSessions - presentCount);
+
+        entryMap.set(`student-class-${index}`, {
+          key: `student-class-${index}`,
+          subjectId: identifier ? normalizeIdString(identifier) : null,
+          label: trimmedLabel,
+          code: "",
+          total: totalSessions,
+          present: presentCount,
+          absent: absentCount,
+          students: [],
+          records: summaries,
+          latestAttendanceDate,
+        });
+      };
+
+      if (studentAssignedSubjectNames.length) {
+        studentAssignedSubjectNames.forEach((name, index) =>
+          ensureEntryForLabel(name, name, index)
+        );
+      }
+
+      return Array.from(entryMap.values()).sort((a, b) =>
+        a.label.localeCompare(b.label)
+      );
+    }
+
+    const entries = [];
+
+    if (
+      Array.isArray(subjectGroupsWithStatus) &&
+      subjectGroupsWithStatus.length
+    ) {
+      subjectGroupsWithStatus.forEach((group, index) => {
+        const { subjectIdNormalized, subjectLabel, subjectCode, entryKey } =
+          buildSubjectMeta(group, index);
+
+        const studentsList = Array.isArray(group.students)
+          ? group.students
+          : [];
+        let presentCount = 0;
+        let latestAttendanceDate = null;
+
+        const subjectNameKey = subjectLabel.toLowerCase();
+
+        const studentSummaries = studentsList.map((student, studentIndex) => {
+          const studentId = normalizeIdString(resolveStudentId(student));
+          const attendanceRecords =
+            studentId && attendanceByStudent.has(studentId)
+              ? attendanceByStudent.get(studentId)
+              : [];
+
+          let matchedRecord = null;
+
+          if (attendanceRecords && attendanceRecords.length) {
+            for (const record of attendanceRecords) {
+              const hints = getAttendanceSubjectHints(record);
+              if (
+                (subjectIdNormalized && hints.ids.has(subjectIdNormalized)) ||
+                (subjectNameKey && hints.names.has(subjectNameKey))
+              ) {
+                matchedRecord = record;
+                break;
+              }
+            }
+
+            if (!matchedRecord) {
+              matchedRecord = attendanceRecords[0];
+            }
+          }
+
+          const { statusLabel, statusKey } = resolveStatusInfo(
+            matchedRecord || {}
+          );
+          const attendanceDate = matchedRecord
+            ? resolveRecordDate(matchedRecord)
+            : null;
+
+          if (statusKey === "present" || statusKey === "late") {
+            presentCount += 1;
+          }
+
+          if (attendanceDate) {
+            const timestamp = new Date(attendanceDate).getTime();
+            if (Number.isFinite(timestamp)) {
+              if (!latestAttendanceDate) {
+                latestAttendanceDate = new Date(timestamp).toISOString();
+              } else {
+                const current = new Date(latestAttendanceDate).getTime();
+                if (timestamp > current) {
+                  latestAttendanceDate = new Date(timestamp).toISOString();
+                }
+              }
+            }
+          }
+
+          return {
+            id: studentId ?? `student-${index}-${studentIndex}`,
+            name: getStudentDisplayName(student),
+            statusLabel,
+            statusKey,
+            attendanceDate,
+          };
+        });
+
+        const totalStudents = studentsList.length;
+        const absentCount = Math.max(0, totalStudents - presentCount);
+
+        studentSummaries.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+        );
+
+        entries.push({
+          key: entryKey,
+          subjectId: subjectIdNormalized,
+          label: subjectLabel,
+          code: subjectCode,
+          total: totalStudents,
+          present: presentCount,
+          absent: absentCount,
+          students: studentSummaries,
+          records: [],
+          latestAttendanceDate,
+        });
+      });
+    }
+
+    if (!entries.length) {
+      const fallbackOptions = Array.isArray(courseSubjectOptions)
+        ? courseSubjectOptions
+        : [];
+
+      if (fallbackOptions.length) {
+        fallbackOptions.forEach((option, index) => {
+          const normalizedId = normalizeIdString(option.id);
+          entries.push({
+            key: normalizedId ?? `fallback-${index}`,
+            subjectId: normalizedId,
+            label:
+              (option.label || "").trim() ||
+              (normalizedId ? `Class ${normalizedId}` : `Class ${index + 1}`),
+            code: option.code ?? "",
+            total: 0,
+            present: 0,
+            absent: 0,
+            students: [],
+            records: [],
+            latestAttendanceDate: null,
+          });
+        });
+      } else if (courseSubjectNames.length) {
+        courseSubjectNames.forEach((name, index) => {
+          entries.push({
+            key: normalizeIdString(name) ?? `course-class-${index}`,
+            subjectId: normalizeIdString(name),
+            label: String(name || `Class ${index + 1}`).trim(),
+            code: "",
+            total: 0,
+            present: 0,
+            absent: 0,
+            students: [],
+            records: [],
+            latestAttendanceDate: null,
+          });
+        });
+      }
+    }
+
+    return entries;
+  }, [
+    isStudentUser,
+    subjectGroupsWithStatus,
+    normalizeIdString,
+    courseSubjectOptionMap,
+    courseSubjectOptions,
+    course?.subjects,
+    attendanceByStudent,
+    getAttendanceSubjectHints,
+    getStudentDisplayName,
+    resolveStudentId,
+    studentIdentifierValues,
+    studentAssignedSubjectNames,
+  ]);
+
+  const selectedClassInfo = useMemo(() => {
+    if (!selectedClassKey || !classStatsEntries.length) {
+      return null;
+    }
+    return (
+      classStatsEntries.find((entry) => entry.key === selectedClassKey) || null
+    );
+  }, [selectedClassKey, classStatsEntries]);
+
+  const showClassStatsPanel =
+    Boolean(selectedClassInfo) && Boolean(isClassStatsOpen);
+
+  useEffect(() => {
+    if (!selectedClassKey) {
+      return;
+    }
+
+    const exists = classStatsEntries.some(
+      (entry) => entry.key === selectedClassKey
+    );
+
+    if (!exists) {
+      setIsClassStatsOpen(false);
+      setSelectedClassKey(null);
+    }
+  }, [selectedClassKey, classStatsEntries]);
+
+  const handleClassChipClick = useCallback(
+    (entryKey) => {
+      if (!entryKey) {
+        return;
+      }
+
+      if (selectedClassKey === entryKey && isClassStatsOpen) {
+        setIsClassStatsOpen(false);
+        setSelectedClassKey(null);
+      } else {
+        setSelectedClassKey(entryKey);
+        setIsClassStatsOpen(true);
+      }
+    },
+    [selectedClassKey, isClassStatsOpen]
+  );
+
+  const handleCloseClassStats = useCallback(() => {
+    setIsClassStatsOpen(false);
+    setSelectedClassKey(null);
+  }, []);
 
   // Alert system functions
   const showAlertMessage = (message, type = "success") => {
@@ -2633,7 +3467,11 @@ const CourseView = () => {
     ? studentAssignedSubjectNames
     : subjects;
   const formattedSubjects = visibleSubjects.join(", ");
-  const classesCount = visibleSubjects.length;
+  const classesCount =
+    classStatsEntries.length ||
+    (isStudentUser
+      ? studentAssignedSubjectNames.length
+      : visibleSubjects.length);
   const courseTeacherId = course?.teacherId;
   const hasTeacherAssignment =
     courseTeacherId !== undefined &&
@@ -2663,7 +3501,7 @@ const CourseView = () => {
 
   return (
     <div
-      className={`flex flex-col p-1 md:p-1 rounded-xl shadow-md h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700`}
+      className={`relative flex flex-col p-1 md:p-1 rounded-xl shadow-md h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700`}
     >
       {/* Alert System */}
       {showAlert && (
@@ -2684,6 +3522,12 @@ const CourseView = () => {
           </div>
         </div>
       )}
+
+      <ClassStatsPanel
+        open={showClassStatsPanel}
+        classInfo={selectedClassInfo}
+        onClose={handleCloseClassStats}
+      />
 
       {/* Header Section */}
       <div className="mt-2 mb-3 md:mb-5">
@@ -2827,11 +3671,34 @@ const CourseView = () => {
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                 Classes
               </p>
-              <p className="text-gray-900 dark:text-white">
-                {formattedSubjects && String(formattedSubjects).trim()
-                  ? formattedSubjects
-                  : "No classes assigned"}
-              </p>
+              {classStatsEntries.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {classStatsEntries.map((entry) => {
+                    const isActiveChip =
+                      showClassStatsPanel && selectedClassKey === entry.key;
+                    return (
+                      <button
+                        key={entry.key}
+                        type="button"
+                        onClick={() => handleClassChipClick(entry.key)}
+                        className={`px-2 py-1 text-xs font-medium rounded-full border transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-indigo-500 ${
+                          isActiveChip
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-indigo-50 hover:border-indigo-400 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:border-indigo-400"
+                        }`}
+                      >
+                        {entry.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-gray-900 dark:text-white">
+                  {formattedSubjects && String(formattedSubjects).trim()
+                    ? formattedSubjects
+                    : "No classes assigned"}
+                </p>
+              )}
             </div>
           </div>
         </div>
