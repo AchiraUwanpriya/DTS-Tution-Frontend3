@@ -81,6 +81,7 @@ const CourseView = () => {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [reactivating, setReactivating] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
   const [teacher, setTeacher] = useState(null);
   const [teacherLoading, setTeacherLoading] = useState(false);
   const [teacherError, setTeacherError] = useState(null);
@@ -1881,6 +1882,91 @@ const CourseView = () => {
     await handleEnrollmentStatusChange(studentEntry, true);
   };
 
+  const handleDeactivateCourse = async () => {
+    const confirmed = window.confirm(
+      "Mark this course as inactive? This will prevent new enrollments."
+    );
+    if (!confirmed) return;
+
+    const rawCourseId =
+      course?.id ??
+      course?.CourseID ??
+      course?.courseID ??
+      course?.CourseId ??
+      course?.courseId ??
+      id;
+
+    if (rawCourseId === undefined || rawCourseId === null) {
+      showAlertMessage("Course identifier missing.", "error");
+      return;
+    }
+
+    setDeactivating(true);
+    try {
+      await deactivateCourse(rawCourseId);
+      setCourse((prev) =>
+        prev
+          ? {
+              ...prev,
+              isActive: false,
+              IsActive: false,
+              status: "inactive",
+              Status: "inactive",
+            }
+          : prev
+      );
+      showAlertMessage("Course marked inactive.", "success");
+    } catch (error) {
+      console.error("Failed to inactivate course:", error);
+      showAlertMessage(
+        error?.message || "Unable to mark course inactive.",
+        "error"
+      );
+    } finally {
+      setDeactivating(false);
+    }
+  };
+
+  const handleReactivateCourse = async () => {
+    const rawCourseId =
+      course?.id ??
+      course?.CourseID ??
+      course?.courseID ??
+      course?.CourseId ??
+      course?.courseId ??
+      id;
+
+    if (rawCourseId === undefined || rawCourseId === null) {
+      showAlertMessage("Course identifier missing.", "error");
+      return;
+    }
+
+    setReactivating(true);
+    try {
+      await reactivateCourse(rawCourseId);
+      setCourse((prev) =>
+        prev
+          ? {
+              ...prev,
+              isActive: true,
+              IsActive: true,
+              status: "active",
+              Status: "active",
+            }
+          : prev
+      );
+      showAlertMessage("Course reactivated.", "success");
+    } catch (error) {
+      console.error("Failed to reactivate course:", error);
+      showAlertMessage(
+        error?.message || "Unable to reactivate course.",
+        "error"
+      );
+    } finally {
+      setReactivating(false);
+    }
+  };
+
   const handleStudentPickerClose = () => {
     if (!addingStudents) {
       setShowStudentPicker(false);
@@ -2413,12 +2499,31 @@ const CourseView = () => {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && (
-              <button
-                onClick={() => setShowEditModal(true)}
-                className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm"
-              >
-                <FiEdit className="w-4 h-4" /> Edit Course
-              </button>
+              <>
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm"
+                >
+                  <FiEdit className="w-4 h-4" /> Edit Course
+                </button>
+                {isCourseActive ? (
+                  <button
+                    onClick={handleDeactivateCourse}
+                    disabled={deactivating}
+                    className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm ml-2 disabled:opacity-60"
+                  >
+                    <FiTrash2 className="w-4 h-4" /> Inactivate
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleReactivateCourse}
+                    disabled={reactivating}
+                    className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm ml-2 disabled:opacity-60"
+                  >
+                    <FiRefreshCw className="w-4 h-4" /> Reactivate
+                  </button>
+                )}
+              </>
             )}
             <span className={statusBadgeClassName}>{statusBadgeLabel}</span>
           </div>
