@@ -114,6 +114,60 @@ const CourseView = () => {
   // Ref for student menu wrapper to detect outside clicks
   const studentMenuRef = useRef(null);
 
+  const isStudentUser = user?.userType === "student";
+
+  const studentIdentifierValues = useMemo(() => {
+    if (!user || typeof user !== "object") {
+      return [];
+    }
+
+    const collected = new Set();
+
+    const push = (value) => {
+      if (value === undefined || value === null) return;
+      const str = String(value).trim();
+      if (str) {
+        collected.add(str);
+      }
+    };
+
+    push(user.StudentID ?? user.studentID ?? user.studentId);
+    push(user.UserID ?? user.userID ?? user.userId ?? user.id);
+
+    const studentProfile = user.Student ?? user.student ?? null;
+    if (studentProfile && typeof studentProfile === "object") {
+      push(
+        studentProfile.StudentID ??
+          studentProfile.studentID ??
+          studentProfile.studentId ??
+          studentProfile.id
+      );
+
+      const nestedStudentUser =
+        studentProfile.User ?? studentProfile.user ?? null;
+      if (nestedStudentUser && typeof nestedStudentUser === "object") {
+        push(
+          nestedStudentUser.UserID ??
+            nestedStudentUser.userID ??
+            nestedStudentUser.userId ??
+            nestedStudentUser.id
+        );
+      }
+    }
+
+    const nestedUser = user.User ?? user.user ?? null;
+    if (nestedUser && typeof nestedUser === "object") {
+      push(
+        nestedUser.UserID ??
+          nestedUser.userID ??
+          nestedUser.userId ??
+          nestedUser.id
+      );
+    }
+
+    return Array.from(collected);
+  }, [user]);
+
   const normalizeIdString = useCallback((value) => {
     if (value === null || value === undefined) {
       return null;
@@ -1311,6 +1365,153 @@ const CourseView = () => {
     return map;
   }, [courseSubjectOptions]);
 
+  const studentAssignedSubjectNames = useMemo(() => {
+    if (!isStudentUser) {
+      return [];
+    }
+
+    const identifierSet = new Set(studentIdentifierValues);
+    if (!identifierSet.size) {
+      return [];
+    }
+
+    const seenLabels = new Set();
+    const assignedLabels = [];
+
+    const matchesCurrentStudent = (entry) => {
+      if (!entry || typeof entry !== "object") {
+        return false;
+      }
+
+      const considerValue = (value) => {
+        if (value === undefined || value === null) {
+          return false;
+        }
+        const str = String(value).trim();
+        if (!str) {
+          return false;
+        }
+        return identifierSet.has(str);
+      };
+
+      const directId = resolveStudentId(entry);
+      if (directId && identifierSet.has(directId)) {
+        return true;
+      }
+
+      const directFields = [
+        entry.StudentID,
+        entry.studentID,
+        entry.studentId,
+        entry.UserID,
+        entry.userID,
+        entry.userId,
+        entry.ID,
+        entry.Id,
+        entry.id,
+      ];
+
+      if (directFields.some(considerValue)) {
+        return true;
+      }
+
+      const nestedCandidates = [
+        entry.Student,
+        entry.student,
+        entry.User,
+        entry.user,
+        entry.StudentDetails,
+        entry.studentDetails,
+        entry.UserDetails,
+        entry.userDetails,
+      ];
+
+      for (const nested of nestedCandidates) {
+        if (!nested || typeof nested !== "object") {
+          continue;
+        }
+
+        const nestedId = resolveStudentId(nested);
+        if (nestedId && identifierSet.has(nestedId)) {
+          return true;
+        }
+
+        const nestedFields = [
+          nested.StudentID,
+          nested.studentID,
+          nested.studentId,
+          nested.UserID,
+          nested.userID,
+          nested.userId,
+          nested.ID,
+          nested.Id,
+          nested.id,
+        ];
+
+        if (nestedFields.some(considerValue)) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    (subjectStudentGroups || []).forEach((group) => {
+      if (!group) {
+        return;
+      }
+
+      const studentsList = Array.isArray(group.students) ? group.students : [];
+      if (!studentsList.some(matchesCurrentStudent)) {
+        return;
+      }
+
+      const subjectIdValue =
+        group.subjectId ?? group.SubjectID ?? group.SubjectId ?? null;
+      const subjectKey =
+        subjectIdValue !== null && subjectIdValue !== undefined
+          ? String(subjectIdValue)
+          : null;
+
+      let label = "";
+      if (subjectKey && courseSubjectOptionMap.has(subjectKey)) {
+        label = courseSubjectOptionMap.get(subjectKey)?.label ?? "";
+      }
+
+      const nameCandidates = [
+        label,
+        group.subjectName,
+        group.SubjectName,
+        group?.Subject?.subjectName,
+        group?.Subject?.SubjectName,
+      ];
+
+      const resolvedLabel =
+        nameCandidates.find(
+          (candidate) =>
+            typeof candidate === "string" && candidate.trim().length > 0
+        ) ?? (subjectKey ? `Subject ${subjectKey}` : "");
+
+      if (!resolvedLabel) {
+        return;
+      }
+
+      const normalized = resolvedLabel.trim();
+      const normalizedKey = normalized.toLowerCase();
+      if (!seenLabels.has(normalizedKey)) {
+        seenLabels.add(normalizedKey);
+        assignedLabels.push(normalized);
+      }
+    });
+
+    return assignedLabels;
+  }, [
+    isStudentUser,
+    studentIdentifierValues,
+    subjectStudentGroups,
+    courseSubjectOptionMap,
+  ]);
+
   // Alert system functions
   const showAlertMessage = (message, type = "success") => {
     setAlertMessage(message);
@@ -2428,8 +2629,11 @@ const CourseView = () => {
     : course.subject
     ? [course.subject]
     : [];
-
-  const formattedSubjects = subjects.join(", ");
+  const visibleSubjects = isStudentUser
+    ? studentAssignedSubjectNames
+    : subjects;
+  const formattedSubjects = visibleSubjects.join(", ");
+  const classesCount = visibleSubjects.length;
   const courseTeacherId = course?.teacherId;
   const hasTeacherAssignment =
     courseTeacherId !== undefined &&
@@ -2577,7 +2781,7 @@ const CourseView = () => {
                   Classes
                 </p>
                 <p className="text-sm font-bold text-amber-600 dark:text-amber-400">
-                  {subjects.length}
+                  {classesCount}
                 </p>
               </div>
               <FiBook className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -2604,7 +2808,7 @@ const CourseView = () => {
                 {course.academicYear || "Not specified"}
               </p>
             </div>
-            <div className="md:col-span-2">
+            <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                 Assigned Teacher
               </p>
@@ -2616,6 +2820,17 @@ const CourseView = () => {
                     ? teacherDisplayName
                     : "Teacher not available"
                   : "No teacher assigned"}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                Classes
+              </p>
+              <p className="text-gray-900 dark:text-white">
+                {formattedSubjects && String(formattedSubjects).trim()
+                  ? formattedSubjects
+                  : "No classes assigned"}
               </p>
             </div>
           </div>
