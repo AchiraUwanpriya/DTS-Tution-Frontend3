@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import Cropper from "react-easy-crop";
 import Button from "../common/Button";
@@ -157,6 +157,31 @@ const UserForm = ({
   } = useForm({
     defaultValues: getDefaults(initialUser, forceUserType),
   });
+
+  const resolvedTeacherId = useMemo(() => {
+    const candidates = [
+      teacherId,
+      initialUser?.TeacherID,
+      initialUser?.teacherID,
+      initialUser?.teacherId,
+      initialUser?.UserID,
+      initialUser?.userID,
+      initialUser?.userId,
+      initialUser?.id,
+    ];
+
+    for (const value of candidates) {
+      if (value === undefined || value === null) continue;
+      const str = String(value).trim();
+      if (str) {
+        return str;
+      }
+    }
+
+    return "";
+  }, [teacherId, initialUser]);
+
+  const effectiveTeacherId = resolvedTeacherId || null;
 
   // Async uniqueness checks (soft-fail to true on API error to avoid blocking)
   const isUsernameUnique = async (val) => {
@@ -752,8 +777,8 @@ const UserForm = ({
     const load = async () => {
       try {
         setLoadingCourses(true);
-        const all = teacherId
-          ? await getTeacherCourses(teacherId)
+        const all = effectiveTeacherId
+          ? await getTeacherCourses(effectiveTeacherId)
           : await getAllCourses();
         if (!mounted) return;
         setCourses(all || []);
@@ -769,7 +794,7 @@ const UserForm = ({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [effectiveTeacherId]);
 
   useEffect(() => {
     // If creating a new student (userType student and no existing user),
@@ -1693,8 +1718,17 @@ const UserForm = ({
             try {
               // If a teacherId was provided to this form, ensure the
               // created course is associated with that teacher.
-              const payload = teacherId
-                ? { ...data, TeacherID: teacherId, teacherId }
+              const numericTeacherId = Number(effectiveTeacherId);
+              const payload = effectiveTeacherId
+                ? {
+                    ...data,
+                    TeacherID: Number.isNaN(numericTeacherId)
+                      ? effectiveTeacherId
+                      : numericTeacherId,
+                    teacherId: Number.isNaN(numericTeacherId)
+                      ? effectiveTeacherId
+                      : numericTeacherId,
+                  }
                 : data;
               const newCourse = await createCourse(payload);
               // ensure id is represented as string
@@ -1795,7 +1829,9 @@ const UserForm = ({
         description="Choose one or more courses to assign to this teacher."
         multiSelect={true}
         allowCreate={true}
-        teacherId={teacherId}
+        teacherId={effectiveTeacherId || undefined}
+        scopeToTeacher={false}
+        hideAssignedToOtherTeachers={true}
       />
 
       <CoursePickerModal

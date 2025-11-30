@@ -104,7 +104,6 @@ const UserDetailsPage = ({
     return roleName === "student";
   }, [user]);
 
-
   // const isTeacherViewer = useMemo(() => {
   //   if (!authUser) return false;
   //   const roleId = String(
@@ -139,8 +138,6 @@ const UserDetailsPage = ({
 
   //   return null;
   // }, [authUser, isTeacherViewer]);
-
-
 
   const teacherIdentifier = useMemo(() => {
     const candidates = [
@@ -246,7 +243,6 @@ const UserDetailsPage = ({
           : rawStudentId;
         const list = await getStudentCourses(normalizedStudentId);
 
-
         // let scopedCourses = Array.isArray(list) ? list : [];
 
         // if (isTeacherViewer && viewerTeacherId) {
@@ -285,7 +281,6 @@ const UserDetailsPage = ({
 
         setCourses(Array.isArray(list) ? list : []);
 
-
         try {
           const enrolls = await getEnrollmentsByStudent(normalizedStudentId);
           setStudentEnrollments(Array.isArray(enrolls) ? enrolls : []);
@@ -310,17 +305,15 @@ const UserDetailsPage = ({
       setCoursesLoading(false);
     }
 
-  // }, [
-  //   isStudentUser,
-  //   isTeacherUser,
-  //   teacherIdentifier,
-  //   user,
-  //   isTeacherViewer,
-  //   viewerTeacherId,
-  // ]);
-
+    // }, [
+    //   isStudentUser,
+    //   isTeacherUser,
+    //   teacherIdentifier,
+    //   user,
+    //   isTeacherViewer,
+    //   viewerTeacherId,
+    // ]);
   }, [isStudentUser, isTeacherUser, teacherIdentifier, user]);
-
 
   useEffect(() => {
     loadCourses();
@@ -375,56 +368,56 @@ const UserDetailsPage = ({
     return Array.from(new Set(collected));
   }, [courses]);
 
-// <<<<<<< HEAD
-//   const studentClassName = useMemo(() => {
-//     const candidateFields = [
-//       studentDetails?.Class,
-//       studentDetails?.class,
-//       studentDetails?.CurrentGrade,
-//       studentDetails?.currentGrade,
-//     ];
+  // <<<<<<< HEAD
+  //   const studentClassName = useMemo(() => {
+  //     const candidateFields = [
+  //       studentDetails?.Class,
+  //       studentDetails?.class,
+  //       studentDetails?.CurrentGrade,
+  //       studentDetails?.currentGrade,
+  //     ];
 
-//     for (const value of candidateFields) {
-//       if (value === undefined || value === null) continue;
-//       const trimmed = String(value).trim();
-//       if (trimmed) {
-//         return trimmed;
-//       }
-//     }
+  //     for (const value of candidateFields) {
+  //       if (value === undefined || value === null) continue;
+  //       const trimmed = String(value).trim();
+  //       if (trimmed) {
+  //         return trimmed;
+  //       }
+  //     }
 
-//     if (studentSubjects && studentSubjects.length) {
-//       const first = String(studentSubjects[0] || "").trim();
-//       if (first) {
-//         return first;
-//       }
-//     }
+  //     if (studentSubjects && studentSubjects.length) {
+  //       const first = String(studentSubjects[0] || "").trim();
+  //       if (first) {
+  //         return first;
+  //       }
+  //     }
 
-//     if (Array.isArray(courses) && courses.length) {
-//       const firstCourse = courses.find(Boolean);
-//       if (firstCourse) {
-//         const courseCandidates = [
-//           firstCourse.className,
-//           firstCourse.ClassName,
-//           firstCourse.section,
-//           firstCourse.Section,
-//           firstCourse.name,
-//           firstCourse.CourseName,
-//           firstCourse.courseName,
-//         ];
-//         for (const value of courseCandidates) {
-//           if (value === undefined || value === null) continue;
-//           const trimmed = String(value).trim();
-//           if (trimmed) {
-//             return trimmed;
-//           }
-//         }
-//       }
-//     }
+  //     if (Array.isArray(courses) && courses.length) {
+  //       const firstCourse = courses.find(Boolean);
+  //       if (firstCourse) {
+  //         const courseCandidates = [
+  //           firstCourse.className,
+  //           firstCourse.ClassName,
+  //           firstCourse.section,
+  //           firstCourse.Section,
+  //           firstCourse.name,
+  //           firstCourse.CourseName,
+  //           firstCourse.courseName,
+  //         ];
+  //         for (const value of courseCandidates) {
+  //           if (value === undefined || value === null) continue;
+  //           const trimmed = String(value).trim();
+  //           if (trimmed) {
+  //             return trimmed;
+  //           }
+  //         }
+  //       }
+  //     }
 
-//     return null;
-//   }, [studentDetails, studentSubjects, courses]);
+  //     return null;
+  //   }, [studentDetails, studentSubjects, courses]);
 
-// =======
+  // =======
 
   const isAdminViewer = useMemo(() => {
     if (!authUser) return false;
@@ -1347,6 +1340,7 @@ const UserDetailsPage = ({
                     : resolvedTeacherId
                 }
                 scopeToTeacher={false}
+                hideAssignedToOtherTeachers={true}
                 excludedIds={assignedCourseIds}
                 saving={assigningCourses}
                 proceedLabel={

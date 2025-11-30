@@ -39,6 +39,9 @@ const CoursePickerModal = ({
   // newly-created teacher).
   teacherId = null,
   scopeToTeacher = true,
+  // when true, hide courses already assigned to a different teacher while still showing
+  // the ones assigned to the provided teacher ID (if any).
+  hideAssignedToOtherTeachers = false,
   // when true, hide existing course list and only show inline CourseForm for creating
   // a new course. After creation the picker will call `onProceed` with the created id.
   onlyCreate = false,
@@ -94,30 +97,115 @@ const CoursePickerModal = ({
     setSelectedCourseIds((initialSelected || []).map((c) => String(c)));
   }, [initialSelected]);
 
+  const normalizedTeacherId = useMemo(() => {
+    if (teacherId === null || teacherId === undefined) return "";
+    const str = String(teacherId).trim();
+    return str;
+  }, [teacherId]);
+
+  const resolveCourseId = (course) =>
+    String(
+      course?.id ??
+        course?.CourseID ??
+        course?.CourseId ??
+        course?.courseId ??
+        ""
+    );
+
+  const resolveAssignedTeacherId = (course) => {
+    if (!course || typeof course !== "object") return "";
+    const candidates = [
+      course.teacherId,
+      course.TeacherID,
+      course.teacher?.teacherId,
+      course.teacher?.TeacherID,
+      course.teacher?.id,
+      course.teacher?.Id,
+    ];
+    for (const candidate of candidates) {
+      if (candidate === undefined || candidate === null) continue;
+      const str = String(candidate).trim();
+      if (str) {
+        return str;
+      }
+    }
+    return "";
+  };
+
   const filtered = useMemo(() => {
     const q = String(query || "")
       .toLowerCase()
       .trim();
-    // compute base list by excluding any provided ids
+
     const excludeSet = new Set((excludedIds || []).map((id) => String(id)));
-    const base = (courses || []).filter((c) => {
-      const cid = String(c.id ?? c.CourseID ?? c.CourseId ?? c.courseId ?? "");
-      return !excludeSet.has(cid);
+    let visible = (courses || []).filter((course) => {
+      const cid = resolveCourseId(course);
+      return cid && !excludeSet.has(cid);
     });
 
-    if (!q) return base || [];
-    return (base || []).filter((c) => {
-      const name = (
-        c.name ||
-        c.CourseName ||
-        c.title ||
-        c.courseName ||
-        ""
-      ).toLowerCase();
-      const desc = (c.description || "").toLowerCase();
-      return name.includes(q) || desc.includes(q);
+    if (hideAssignedToOtherTeachers) {
+      visible = visible.filter((course) => {
+        const assignedId = resolveAssignedTeacherId(course);
+        if (!assignedId) return true;
+        if (normalizedTeacherId && assignedId === normalizedTeacherId) {
+          return true;
+        }
+        return false;
+      });
+    }
+
+    if (q) {
+      visible = visible.filter((course) => {
+        const name = (
+          course.name ||
+          course.CourseName ||
+          course.title ||
+          course.courseName ||
+          ""
+        ).toLowerCase();
+        const desc = (course.description || "").toLowerCase();
+        return name.includes(q) || desc.includes(q);
+      });
+    }
+
+    if (hideAssignedToOtherTeachers && selectedCourseIds.length) {
+      const visibleIds = new Set(
+        visible.map((course) => resolveCourseId(course))
+      );
+      const missingIds = selectedCourseIds
+        .map((id) => String(id))
+        .filter((id) => id && !visibleIds.has(id));
+
+      if (missingIds.length) {
+        const missingCourses = (courses || []).filter((course) => {
+          const cid = resolveCourseId(course);
+          return cid && missingIds.includes(cid);
+        });
+
+        if (missingCourses.length) {
+          visible = [...visible, ...missingCourses];
+        }
+      }
+    }
+
+    const uniqueMap = new Map();
+    visible.forEach((course) => {
+      const cid = resolveCourseId(course);
+      if (!cid || uniqueMap.has(cid)) {
+        return;
+      }
+      uniqueMap.set(cid, course);
     });
-  }, [courses, query]);
+
+    return Array.from(uniqueMap.values());
+  }, [
+    courses,
+    query,
+    excludedIds,
+    hideAssignedToOtherTeachers,
+    normalizedTeacherId,
+    selectedCourseIds,
+  ]);
 
   const toggle = (cid) => {
     if (multiSelect) {
@@ -149,8 +237,18 @@ const CoursePickerModal = ({
           <CourseForm
             onSubmit={async (data) => {
               try {
-                const payload = teacherId
-                  ? { ...data, TeacherID: teacherId, teacherId }
+                const teacherIdentifier = normalizedTeacherId || teacherId;
+                const numericTeacherId = Number(teacherIdentifier);
+                const payload = teacherIdentifier
+                  ? {
+                      ...data,
+                      TeacherID: Number.isNaN(numericTeacherId)
+                        ? teacherIdentifier
+                        : numericTeacherId,
+                      teacherId: Number.isNaN(numericTeacherId)
+                        ? teacherIdentifier
+                        : numericTeacherId,
+                    }
                   : data;
                 const newCourse = await createCourse(payload);
                 const newId = String(
@@ -234,7 +332,17 @@ const CoursePickerModal = ({
             />
           ) : (
             <div className="py-6 text-center text-sm text-gray-500">
-              No courses found. You can add a new course.
+              {hideAssignedToOtherTeachers &&
+              Array.isArray(courses) &&
+              courses.length > 0 ? (
+                <>
+                  No unassigned courses available. All existing courses are
+                  currently assigned to a teacher. You can add a new course
+                  using the <strong>+ Add New Course</strong> button.
+                </>
+              ) : (
+                <>No courses found. You can add a new course.</>
+              )}
             </div>
           )}
         </div>
