@@ -150,6 +150,13 @@ const dayNames = [
   "Sunday",
 ];
 
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "nameAsc", label: "Name A-Z" },
+  { value: "nameDesc", label: "Name Z-A" },
+];
+
 const formatScheduleSummary = (schedule) => {
   if (!schedule || typeof schedule !== "object") {
     return "";
@@ -532,6 +539,7 @@ const AdminUsers = () => {
   const [toastType, setToastType] = useState("success");
   // view for members list: 'active' or 'inactive'
   const [membersTab, setMembersTab] = useState("active");
+  const [sortOption, setSortOption] = useState("newest");
   const [coursePickerSaving, setCoursePickerSaving] = useState(false);
   const [coursePickerError, setCoursePickerError] = useState("");
   const [pendingCourseSelection, setPendingCourseSelection] = useState([]);
@@ -1242,7 +1250,9 @@ const AdminUsers = () => {
               setNewTeacherIdForAssignment(String(teacherId));
               setShowAssignTeacherCourses(true);
               try {
-                const fullName = `${merged.FirstName || merged.firstName || ""} ${merged.LastName || merged.lastName || ""}`.trim();
+                const fullName = `${
+                  merged.FirstName || merged.firstName || ""
+                } ${merged.LastName || merged.lastName || ""}`.trim();
                 const persisted = { id: String(teacherId), name: fullName };
                 window.localStorage.setItem(
                   "selected_teacher_for_course",
@@ -1832,34 +1842,73 @@ const AdminUsers = () => {
               })
             : filtered;
 
+        const sortedUsers = sortUsers(displayUsers, sortOption);
+
+        const addButton = (() => {
+          if (activeTab === "admins") {
+            return (
+              <button
+                onClick={() => openCreateFor(1)}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                + Add Admin
+              </button>
+            );
+          }
+
+          if (activeTab === "teachers") {
+            return (
+              <button
+                onClick={() => openCreateFor(2)}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                + Add Teacher
+              </button>
+            );
+          }
+
+          if (activeTab === "students") {
+            return (
+              <button
+                onClick={() => openCreateFor(3)}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                + Add Student
+              </button>
+            );
+          }
+
+          return null;
+        })();
+
         return (
           <>
-            <div className="flex justify-end mb-3">
-              {activeTab === "admins" && (
-                <button
-                  onClick={() => openCreateFor(1)}
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <label
+                  htmlFor="user-sort"
+                  className="text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
-                  + Add Admin
-                </button>
-              )}
+                  Sort by
+                </label>
+                <select
+                  id="user-sort"
+                  value={sortOption}
+                  onChange={(event) => setSortOption(event.target.value)}
+                  className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              {activeTab === "teachers" && (
-                <button
-                  onClick={() => openCreateFor(2)}
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                >
-                  + Add Teacher
-                </button>
-              )}
-
-              {activeTab === "students" && (
-                <button
-                  onClick={() => openCreateFor(3)}
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                >
-                  + Add Student
-                </button>
+              {addButton && (
+                <div className="flex justify-start sm:justify-end w-full sm:w-auto">
+                  {addButton}
+                </div>
               )}
             </div>
 
@@ -1868,8 +1917,8 @@ const AdminUsers = () => {
               const isActiveFlag = (u) =>
                 Boolean(u?.IsActive ?? u?.isActive ?? true);
 
-              const activeUsers = (displayUsers || []).filter(isActiveFlag);
-              const inactiveUsers = (displayUsers || []).filter(
+              const activeUsers = (sortedUsers || []).filter(isActiveFlag);
+              const inactiveUsers = (sortedUsers || []).filter(
                 (u) => !isActiveFlag(u)
               );
 
@@ -2167,6 +2216,187 @@ const ToastWrapper = ({ message, type, onClose }) => {
   return (
     <Toast message={message} type={type} duration={3000} onClose={onClose} />
   );
+};
+
+const getUserFullName = (user) => {
+  if (!user || typeof user !== "object") {
+    return "";
+  }
+
+  const first = ((user.FirstName ?? user.firstName) || "").toString().trim();
+  const last = ((user.LastName ?? user.lastName) || "").toString().trim();
+  const full = `${first} ${last}`.trim();
+  if (full) {
+    return full;
+  }
+
+  const username = ((user.Username ?? user.username) || "").toString().trim();
+  if (username) {
+    return username;
+  }
+
+  return ((user.Email ?? user.email) || "").toString().trim();
+};
+
+const parseTimestamp = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalizeNumeric = (num) => {
+    if (!Number.isFinite(num)) {
+      return null;
+    }
+    if (num > 1e12) {
+      return num;
+    }
+    if (num > 1e9) {
+      return num * 1000;
+    }
+    return null;
+  };
+
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+
+  if (typeof value === "number") {
+    return normalizeNumeric(value);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const dotNet = trimmed.match(/Date\((\d+)\)/i);
+    if (dotNet && dotNet[1]) {
+      const asNumber = Number(dotNet[1]);
+      return normalizeNumeric(asNumber) ?? asNumber;
+    }
+
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric)) {
+      return normalizeNumeric(numeric);
+    }
+
+    const parsed = Date.parse(trimmed);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  return null;
+};
+
+const getUserCreationTime = (user) => {
+  if (!user || typeof user !== "object") {
+    return 0;
+  }
+
+  const raw = user.raw && typeof user.raw === "object" ? user.raw : null;
+  const creationKeys = [
+    "CreatedAt",
+    "createdAt",
+    "CreatedDate",
+    "createdDate",
+    "CreatedOn",
+    "createdOn",
+    "DateCreated",
+    "dateCreated",
+    "RegistrationDate",
+    "registrationDate",
+    "RegisteredAt",
+    "registeredAt",
+    "Created",
+    "created",
+    "InsertDate",
+    "insertDate",
+  ];
+
+  const timestamps = [];
+  creationKeys.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(user, key)) {
+      const parsed = parseTimestamp(user[key]);
+      if (parsed !== null) {
+        timestamps.push(parsed);
+      }
+    }
+    if (raw && Object.prototype.hasOwnProperty.call(raw, key)) {
+      const parsed = parseTimestamp(raw[key]);
+      if (parsed !== null) {
+        timestamps.push(parsed);
+      }
+    }
+  });
+
+  if (raw && typeof raw === "object") {
+    const audit = raw.Audit && typeof raw.Audit === "object" ? raw.Audit : null;
+    if (audit) {
+      const parsed = parseTimestamp(audit.CreatedAt ?? audit.createdAt);
+      if (parsed !== null) {
+        timestamps.push(parsed);
+      }
+    }
+  }
+
+  if (timestamps.length) {
+    return Math.max(...timestamps);
+  }
+
+  const idCandidates = [
+    user.UserID,
+    user.userID,
+    user.userId,
+    user.id,
+    raw?.UserID,
+    raw?.userID,
+    raw?.userId,
+    raw?.id,
+  ];
+
+  for (const candidate of idCandidates) {
+    const asNumber = Number(candidate);
+    if (!Number.isNaN(asNumber) && asNumber !== 0) {
+      return asNumber;
+    }
+  }
+
+  return 0;
+};
+
+const sortUsers = (users, sortOption) => {
+  if (!Array.isArray(users)) {
+    return [];
+  }
+
+  const copy = [...users];
+
+  switch (sortOption) {
+    case "oldest":
+      copy.sort((a, b) => getUserCreationTime(a) - getUserCreationTime(b));
+      break;
+    case "nameAsc":
+      copy.sort((a, b) => {
+        const nameA = getUserFullName(a);
+        const nameB = getUserFullName(b);
+        return nameA.localeCompare(nameB, undefined, { sensitivity: "base" });
+      });
+      break;
+    case "nameDesc":
+      copy.sort((a, b) => {
+        const nameA = getUserFullName(a);
+        const nameB = getUserFullName(b);
+        return nameB.localeCompare(nameA, undefined, { sensitivity: "base" });
+      });
+      break;
+    case "newest":
+    default:
+      copy.sort((a, b) => getUserCreationTime(b) - getUserCreationTime(a));
+      break;
+  }
+
+  return copy;
 };
 
 // Helper: returns filtered users array based on selected tab

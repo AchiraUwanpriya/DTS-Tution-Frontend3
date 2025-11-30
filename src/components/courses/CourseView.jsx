@@ -3910,6 +3910,32 @@ const CourseView = () => {
                                             name={name}
                                             size="sm"
                                             user={student}
+                                            src={
+                                              student?.ProfilePicture ??
+                                              student?.profilePicture ??
+                                              student?.User?.ProfilePicture ??
+                                              student?.User?.profilePicture ??
+                                              student?.UserDetails
+                                                ?.ProfilePicture ??
+                                              student?.UserDetails
+                                                ?.profilePicture ??
+                                              student?.User
+                                                ?.ProfilePictureUrl ??
+                                              student?.User
+                                                ?.profilePictureUrl ??
+                                              student?.User
+                                                ?.profilePictureURL ??
+                                              student?.UserDetails
+                                                ?.ProfilePictureUrl ??
+                                              student?.UserDetails
+                                                ?.profilePictureUrl ??
+                                              student?.UserDetails
+                                                ?.profilePictureURL ??
+                                              student?.ProfilePictureUrl ??
+                                              student?.profilePictureUrl ??
+                                              student?.profilePictureURL ??
+                                              null
+                                            }
                                           />
                                           <div>
                                             <div className="text-sm font-medium text-gray-900 dark:text-white">

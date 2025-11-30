@@ -480,9 +480,19 @@ const UserForm = ({
         // Use local date parts instead of toISOString() to avoid timezone shifts
         const raw =
           u?.EnrollmentDate || u?.enrollmentDate || u?.enrollment_date || "";
-// <<<<<<< HEAD
-        if (!raw) return "";
-// =======
+        // <<<<<<< HEAD
+        if (!raw) {
+          // If no user provided (create mode), default to today's date for usability
+          if (!u) {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, "0");
+            const dd = String(now.getDate()).padStart(2, "0");
+            return `${yyyy}-${mm}-${dd}`;
+          }
+          return "";
+        }
+        // =======
         // if (!raw) {
         //   // If no user provided (create mode), default to today's date for usability
         //   if (!u) {
@@ -494,7 +504,7 @@ const UserForm = ({
         //   }
         //   return "";
         // }
-// >>>>>>> main
+        // >>>>>>> main
         try {
           // If already in YYYY-MM-DD, return as-is
           if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
@@ -1792,63 +1802,63 @@ const UserForm = ({
         isOpen={showStudentCoursePicker}
         onClose={() => setShowStudentCoursePicker(false)}
         initialSelected={studentSelectedCourseIds}
-// <<<<<<< HEAD
-//         onProceed={async (ids) => {
-//           const dedupeIds = (list) =>
-//             Array.from(
-//               new Set(
-//                 (list || [])
-//                   .map((value) => String(value))
-//                   .map((value) => value.trim())
-//                   .filter(Boolean)
-//               )
-//             );
+        // <<<<<<< HEAD
+        //         onProceed={async (ids) => {
+        //           const dedupeIds = (list) =>
+        //             Array.from(
+        //               new Set(
+        //                 (list || [])
+        //                   .map((value) => String(value))
+        //                   .map((value) => value.trim())
+        //                   .filter(Boolean)
+        //               )
+        //             );
 
-//           const previousSelection = studentSelectedCourseIds;
-//           const normalizedSelection = dedupeIds(ids);
+        //           const previousSelection = studentSelectedCourseIds;
+        //           const normalizedSelection = dedupeIds(ids);
 
-//           let accepted = true;
-//           let finalSelection = normalizedSelection;
+        //           let accepted = true;
+        //           let finalSelection = normalizedSelection;
 
-//           if (typeof onStudentCourseSelectionChange === "function") {
-//             try {
-//               const result = await onStudentCourseSelectionChange(
-//                 [...normalizedSelection],
-//                 [...previousSelection]
-//               );
+        //           if (typeof onStudentCourseSelectionChange === "function") {
+        //             try {
+        //               const result = await onStudentCourseSelectionChange(
+        //                 [...normalizedSelection],
+        //                 [...previousSelection]
+        //               );
 
-//               if (Array.isArray(result)) {
-//                 finalSelection = dedupeIds(result);
-//               } else if (result && typeof result === "object") {
-//                 if (result.accepted === false) {
-//                   accepted = false;
-//                 }
-//                 if (Array.isArray(result.finalIds)) {
-//                   finalSelection = dedupeIds(result.finalIds);
-//                 }
-//               } else if (result === false) {
-//                 accepted = false;
-//               }
-//             } catch (handlerError) {
-//               console.error(
-//                 "Student course selection handler failed",
-//                 handlerError
-//               );
-//               accepted = false;
-//             }
-//           }
+        //               if (Array.isArray(result)) {
+        //                 finalSelection = dedupeIds(result);
+        //               } else if (result && typeof result === "object") {
+        //                 if (result.accepted === false) {
+        //                   accepted = false;
+        //                 }
+        //                 if (Array.isArray(result.finalIds)) {
+        //                   finalSelection = dedupeIds(result.finalIds);
+        //                 }
+        //               } else if (result === false) {
+        //                 accepted = false;
+        //               }
+        //             } catch (handlerError) {
+        //               console.error(
+        //                 "Student course selection handler failed",
+        //                 handlerError
+        //               );
+        //               accepted = false;
+        //             }
+        //           }
 
-//           if (!accepted) {
-//             setStudentSelectedCourseIds([...(previousSelection || [])]);
-//             setShowStudentCoursePicker(false);
-//             return;
-//           }
+        //           if (!accepted) {
+        //             setStudentSelectedCourseIds([...(previousSelection || [])]);
+        //             setShowStudentCoursePicker(false);
+        //             return;
+        //           }
 
-//           setStudentSelectedCourseIds(finalSelection);
-// =======
+        //           setStudentSelectedCourseIds(finalSelection);
+        // =======
         onProceed={(ids) => {
           setStudentSelectedCourseIds(ids.map((v) => String(v)));
-// >>>>>>> main
+          // >>>>>>> main
           setShowStudentCoursePicker(false);
         }}
         title="Enroll Student in Courses"
@@ -1869,7 +1879,7 @@ const UserForm = ({
         : null}
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
-{/* <<<<<<< HEAD */}
+        {/* <<<<<<< HEAD */}
         {/* Reset button commented out per request; replaced with Back when provided */}
         {false && (
           <Button
@@ -1891,7 +1901,7 @@ const UserForm = ({
             Back
           </Button>
         ) : null}
-{/* ======= */}
+        {/* ======= */}
         {/* <Button
           type="button"
           variant="secondary"
@@ -1899,8 +1909,8 @@ const UserForm = ({
           className="w-full justify-center sm:w-auto"
         >
           Reset
-        </Button> */} 
-{/* >>>>>>> main */}
+        </Button> */}
+        {/* >>>>>>> main */}
         {onCancel && (
           <Button
             type="button"
