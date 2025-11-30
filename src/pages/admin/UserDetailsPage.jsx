@@ -199,6 +199,7 @@ const UserDetailsPage = ({
   }, [id]);
 
   // When the loaded user is a teacher or student, fetch their courses for admin view
+
   const loadCourses = useCallback(async () => {
     if (!user) {
       setCourses([]);
@@ -243,43 +244,81 @@ const UserDetailsPage = ({
           : rawStudentId;
         const list = await getStudentCourses(normalizedStudentId);
 
-        // let scopedCourses = Array.isArray(list) ? list : [];
+        // By default show all courses from the student record. If the
+        // current viewer is a teacher, filter the shown enrolled courses to
+        // only those that are assigned to the viewing teacher (as per the
+        // student's course objects).
+        let scopedCourses = Array.isArray(list) ? list : [];
 
-        // if (isTeacherViewer && viewerTeacherId) {
-        //   const teacherIdStr = String(viewerTeacherId).trim();
-        //   const matchesViewerTeacher = (course) => {
-        //     if (!course) return false;
-        //     const potentials = [
-        //       course.teacherId,
-        //       course.teacherID,
-        //       course.TeacherId,
-        //       course.TeacherID,
-        //       course?.teacher?.teacherId,
-        //       course?.teacher?.teacherID,
-        //       course?.teacher?.TeacherId,
-        //       course?.teacher?.TeacherID,
-        //       course?.teacher?.id,
-        //       course?.teacher?.Id,
-        //       course?.teacher?.userId,
-        //       course?.teacher?.UserID,
-        //       course?.teacher?.user?.UserID,
-        //       course?.teacher?.user?.userID,
-        //       course?.teacher?.user?.userId,
-        //     ];
+        // If the current viewer is a teacher, only show the student's
+        // courses that are assigned to that teacher. We compute the viewer
+        // identity from `authUser` locally here to avoid referencing hooks
+        // that may be declared later in the file (prevents TDZ errors).
+        const viewerIsTeacher = (() => {
+          if (!authUser) return false;
+          const idVal = String(
+            authUser.UserTypeID || authUser.userTypeID || ""
+          ).trim();
+          if (idVal === "2") return true;
+          const name = String(
+            authUser.userType || authUser.UserType || ""
+          ).toLowerCase();
+          return name === "teacher";
+        })();
 
-        //     return potentials.some((value) => {
-        //       if (value === undefined || value === null) return false;
-        //       const candidate = String(value).trim();
-        //       return candidate.length && candidate === teacherIdStr;
-        //     });
-        //   };
+        if (viewerIsTeacher) {
+          const viewerTeacherIdLocal = (() => {
+            if (!authUser) return null;
+            const candidates = [
+              authUser?.TeacherID,
+              authUser?.teacherID,
+              authUser?.teacherId,
+              authUser?.UserID,
+              authUser?.userID,
+              authUser?.userId,
+              authUser?.id,
+            ];
+            for (const value of candidates) {
+              if (value === undefined || value === null) continue;
+              const str = String(value).trim();
+              if (str.length) return str;
+            }
+            return null;
+          })();
 
-        //   scopedCourses = scopedCourses.filter(matchesViewerTeacher);
-        // }
+          if (viewerTeacherIdLocal) {
+            const teacherIdStr = String(viewerTeacherIdLocal).trim();
+            const matchesViewerTeacher = (course) => {
+              if (!course) return false;
+              const potentials = [
+                course.teacherId,
+                course.teacherID,
+                course.TeacherId,
+                course.TeacherID,
+                course?.teacher?.teacherId,
+                course?.teacher?.teacherID,
+                course?.teacher?.TeacherId,
+                course?.teacher?.TeacherID,
+                course?.teacher?.id,
+                course?.teacher?.Id,
+                course?.teacher?.userId,
+                course?.teacher?.UserID,
+                course?.teacher?.user?.userID,
+                course?.teacher?.user?.userId,
+              ];
 
-        // setCourses(scopedCourses);
+              return potentials.some((value) => {
+                if (value === undefined || value === null) return false;
+                const candidate = String(value).trim();
+                return candidate.length && candidate === teacherIdStr;
+              });
+            };
 
-        setCourses(Array.isArray(list) ? list : []);
+            scopedCourses = scopedCourses.filter(matchesViewerTeacher);
+          }
+        }
+
+        setCourses(scopedCourses);
 
         try {
           const enrolls = await getEnrollmentsByStudent(normalizedStudentId);
@@ -313,7 +352,7 @@ const UserDetailsPage = ({
     //   isTeacherViewer,
     //   viewerTeacherId,
     // ]);
-  }, [isStudentUser, isTeacherUser, teacherIdentifier, user]);
+  }, [isStudentUser, isTeacherUser, teacherIdentifier, user, authUser]);
 
   useEffect(() => {
     loadCourses();
@@ -430,6 +469,37 @@ const UserDetailsPage = ({
     ).toLowerCase();
     return name === "admin";
   }, [authUser]);
+
+  const isTeacherViewer = useMemo(() => {
+    if (!authUser) return false;
+    const idVal = String(
+      authUser.UserTypeID || authUser.userTypeID || ""
+    ).trim();
+    if (idVal === "2") return true;
+    const name = String(
+      authUser.userType || authUser.UserType || ""
+    ).toLowerCase();
+    return name === "teacher";
+  }, [authUser]);
+
+  const viewerTeacherId = useMemo(() => {
+    if (!isTeacherViewer || !authUser) return null;
+    const candidates = [
+      authUser?.TeacherID,
+      authUser?.teacherID,
+      authUser?.teacherId,
+      authUser?.UserID,
+      authUser?.userID,
+      authUser?.userId,
+      authUser?.id,
+    ];
+    for (const value of candidates) {
+      if (value === undefined || value === null) continue;
+      const str = String(value).trim();
+      if (str.length) return str;
+    }
+    return null;
+  }, [authUser, isTeacherViewer]);
 
   const enrollmentIdByCourseId = useMemo(() => {
     const map = new Map();
