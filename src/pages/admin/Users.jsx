@@ -479,11 +479,12 @@ const deriveClassOptions = (
       });
     }
 
-    if (
-      normalizedCourseId &&
-      courseIdCandidates.size &&
-      !courseIdCandidates.has(normalizedCourseId)
-    ) {
+    const hasExplicitMatch = normalizedCourseId
+      ? courseIdCandidates.has(normalizedCourseId)
+      : false;
+    const hasScheduleMatch = subjectScheduleMap.has(normalizedSubjectId);
+
+    if (normalizedCourseId && !hasExplicitMatch && !hasScheduleMatch) {
       return;
     }
 
