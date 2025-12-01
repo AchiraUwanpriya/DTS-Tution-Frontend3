@@ -804,9 +804,9 @@ const UserDetailsPage = ({
     setAssignCoursesError("");
 
     try {
-      for (const { value } of pendingAssignments) {
-        await updateCourse(value, { TeacherID: resolvedTeacherId });
-      }
+      // for (const { value } of pendingAssignments) {
+      //   await updateCourse(value, { TeacherID: resolvedTeacherId });
+      // }
 
       setIsAssignCoursesOpen(false);
       await loadCourses();
