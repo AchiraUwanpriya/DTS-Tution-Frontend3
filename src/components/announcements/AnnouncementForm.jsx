@@ -24,7 +24,7 @@ const AnnouncementForm = ({ onSubmit, loading, initialData = {} }) => {
           name="title"
           type="text"
           {...register("title", { required: "Title is required" })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="mt-1 px-2 py-2 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         {errors.title && (
           <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
@@ -43,7 +43,7 @@ const AnnouncementForm = ({ onSubmit, loading, initialData = {} }) => {
           name="content"
           rows={4}
           {...register("content", { required: "Content is required" })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="mt-1 px-2 py-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         {errors.content && (
           <p className="mt-1 text-sm text-red-600">{errors.content.message}</p>
