@@ -994,10 +994,13 @@ const UserForm = ({
                 id="FirstName"
                 name="FirstName"
                 type="text"
+                placeholder="Enter first name"
                 {...register("FirstName", {
                   required: "First name is required",
+              
                 })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                
+                className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               {errors.FirstName && (
                 <p className="mt-1 text-sm text-red-600">
@@ -1017,8 +1020,9 @@ const UserForm = ({
                 id="LastName"
                 name="LastName"
                 type="text"
+                 placeholder="Enter last name"
                 {...register("LastName", { required: "Last name is required" })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               {errors.LastName && (
                 <p className="mt-1 text-sm text-red-600">
@@ -1040,6 +1044,7 @@ const UserForm = ({
                 id="Username"
                 name="Username"
                 type="text"
+                 placeholder="Enter user name"
                 {...register("Username", {
                   required: "Username is required",
                   minLength: {
@@ -1053,7 +1058,7 @@ const UserForm = ({
                   },
                   validate: isUsernameUnique,
                 })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               {errors.Username && (
                 <p className="mt-1 text-sm text-red-600">
@@ -1073,6 +1078,7 @@ const UserForm = ({
                 id="Email"
                 name="Email"
                 type="email"
+                 placeholder="user@example.com"
                 {...register("Email", {
                   required: "Email is required",
                   pattern: {
@@ -1081,7 +1087,7 @@ const UserForm = ({
                   },
                   validate: isEmailUnique,
                 })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               {errors.Email && (
                 <p className="mt-1 text-sm text-red-600">
@@ -1103,6 +1109,7 @@ const UserForm = ({
                 id="PasswordHash"
                 name="PasswordHash"
                 type="password"
+                placeholder="Enter password"
                 {...register("PasswordHash", {
                   required: !user ? "Password is required" : false,
                   minLength: {
@@ -1110,7 +1117,7 @@ const UserForm = ({
                     message: "Password must be at least 6 characters",
                   },
                 })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               {errors.PasswordHash && (
                 <p className="mt-1 text-sm text-red-600">
@@ -1145,7 +1152,7 @@ const UserForm = ({
                     {...register("FirstName", {
                       required: "First name is required",
                     })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                   {errors.FirstName && (
                     <p className="mt-1 text-sm text-red-600">
@@ -1169,7 +1176,7 @@ const UserForm = ({
                     {...register("LastName", {
                       required: "Last name is required",
                     })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="mt-1 text-xs px-2 py-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                   {errors.LastName && (
                     <p className="mt-1 text-sm text-red-600">
@@ -1205,7 +1212,7 @@ const UserForm = ({
                       },
                       validate: isUsernameUnique,
                     })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                   {errors.Username && (
                     <p className="mt-1 text-sm text-red-600">
@@ -1234,7 +1241,7 @@ const UserForm = ({
                       },
                       validate: isEmailUnique,
                     })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                   {errors.Email && (
                     <p className="mt-1 text-sm text-red-600">
@@ -1264,7 +1271,7 @@ const UserForm = ({
                         message: "Password must be at least 6 characters",
                       },
                     })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="mt-1 text-xs px-2 py-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                   {errors.PasswordHash && (
                     <p className="mt-1 text-sm text-red-600">
@@ -1337,7 +1344,7 @@ const UserForm = ({
                         (v && new Date(v) <= new Date()) ||
                         "Enrollment date can't be in the future",
                     })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="mt-1 text-xs px-2 py-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                   {errors.EnrollmentDate && (
                     <p className="mt-1 text-sm text-red-600">
@@ -1356,8 +1363,9 @@ const UserForm = ({
                   <input
                     id="GuardianName"
                     type="text"
+                     placeholder="Enter Guardian's Name"
                     {...register("GuardianName")}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="mt-1 text-xs py-2 px-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                   {errors.GuardianName && (
                     <p className="mt-1 text-sm text-red-600">
@@ -1383,7 +1391,7 @@ const UserForm = ({
                         String(v).replace(/\D/g, "").length >= 10 ||
                         "Enter at least 10 digits",
                     })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-green-600 focus:ring-green-600 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                   {errors.GuardianPhone && (
                     <p className="mt-1 text-sm text-red-600">
@@ -1489,7 +1497,7 @@ const UserForm = ({
                 placeholder={
                   isEmployeeIdGenerating ? "Generating..." : undefined
                 }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 text-xs px-2 py-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               {isEmployeeIdGenerating && (
                 <p className="mt-1 text-sm text-gray-500">
@@ -1524,7 +1532,7 @@ const UserForm = ({
                     new Date(v) <= new Date() ||
                     "Joining date can't be in the future",
                 })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 text-xs px-2 py-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               {errors.JoiningDate && (
                 <p className="mt-1 text-sm text-red-600">
@@ -1544,8 +1552,9 @@ const UserForm = ({
                 id="Department"
                 name="Department"
                 type="text"
+                 placeholder="Enter Department name"
                 {...register("Department")}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 text-xs py-2 px-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               {errors.Department && (
                 <p className="mt-1 text-sm text-red-600">
@@ -1557,6 +1566,7 @@ const UserForm = ({
             <div>
               <label
                 htmlFor="Qualification"
+                
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300"
               >
                 Qualification
@@ -1565,8 +1575,9 @@ const UserForm = ({
                 id="Qualification"
                 name="Qualification"
                 type="text"
+                 placeholder="Enter Qualification"
                 {...register("Qualification")}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 text-xs px-2 py-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
             </div>
 
@@ -1587,7 +1598,7 @@ const UserForm = ({
                     message: "Bio must be under 1000 characters",
                   },
                 })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
               {errors.Bio && (
                 <p className="mt-1 text-sm text-red-600">
