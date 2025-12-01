@@ -2096,33 +2096,33 @@ const AdminUsers = () => {
                   isNaN(Number(id)) ? id : Number(id)
                 );
                 const teacherId = newTeacherIdForAssignment;
-                if (teacherId && ids.length) {
-                  try {
-                    for (const cid of ids) {
-                      await updateCourse(cid, { TeacherID: teacherId });
-                    }
-                    // Refresh users list to reflect assignments
-                    try {
-                      const all = await getAllUsers();
-                      setUsers(all);
-                    } catch (_) {
-                      // non-fatal
-                    }
-                    setToastMessage("Assigned courses to the new teacher.");
-                    setToastType("success");
-                  } catch (assignErr) {
-                    console.error(
-                      "Failed to assign selected courses to teacher",
-                      assignErr
-                    );
-                    setFormError(
-                      assignErr?.message ||
-                        "Teacher created, but failed to assign selected courses"
-                    );
-                    setToastMessage("Failed to assign selected courses.");
-                    setToastType("error");
-                  }
-                }
+                // if (teacherId && ids.length) {
+                //   try {
+                //     for (const cid of ids) {
+                //       await updateCourse(cid, { TeacherID: teacherId });
+                //     }
+                //     // Refresh users list to reflect assignments
+                //     try {
+                //       const all = await getAllUsers();
+                //       setUsers(all);
+                //     } catch (_) {
+                //       // non-fatal
+                //     }
+                //     setToastMessage("Assigned courses to the new teacher.");
+                //     setToastType("success");
+                //   } catch (assignErr) {
+                //     console.error(
+                //       "Failed to assign selected courses to teacher",
+                //       assignErr
+                //     );
+                //     setFormError(
+                //       assignErr?.message ||
+                //         "Teacher created, but failed to assign selected courses"
+                //     );
+                //     setToastMessage("Failed to assign selected courses.");
+                //     setToastType("error");
+                //   }
+                // }
                 setShowAssignTeacherCourses(false);
                 setNewTeacherIdForAssignment(null);
               }}
