@@ -2034,10 +2034,67 @@ const UserForm = ({
 
         //           setStudentSelectedCourseIds(finalSelection);
         // =======
-        onProceed={(ids) => {
-          setStudentSelectedCourseIds(ids.map((v) => String(v)));
-          // >>>>>>> main
+        onProceed={async (ids) => {
+          const dedupeIds = (list) =>
+            Array.from(
+              new Set(
+                (list || [])
+                  .map((value) => String(value))
+                  .map((value) => value.trim())
+                  .filter(Boolean)
+              )
+            );
+
+          const previousSelection = [...(studentSelectedCourseIds || [])];
+          const normalizedSelection = dedupeIds(ids);
+
           setShowStudentCoursePicker(false);
+
+          let accepted = true;
+          let finalSelection = [...normalizedSelection];
+          let reopenPicker = false;
+
+          if (typeof onStudentCourseSelectionChange === "function") {
+            try {
+              const result = await onStudentCourseSelectionChange(
+                [...normalizedSelection],
+                [...previousSelection]
+              );
+
+              if (Array.isArray(result)) {
+                finalSelection = dedupeIds(result);
+              } else if (result && typeof result === "object") {
+                if (result.accepted === false) {
+                  accepted = false;
+                }
+                if (Array.isArray(result.finalIds)) {
+                  finalSelection = dedupeIds(result.finalIds);
+                }
+                if (result.reopenPicker) {
+                  reopenPicker = true;
+                }
+              } else if (result === false) {
+                accepted = false;
+              }
+            } catch (handlerError) {
+              console.error(
+                "Student course selection handler failed",
+                handlerError
+              );
+              accepted = false;
+              reopenPicker = true;
+            }
+          }
+
+          if (!accepted) {
+            setStudentSelectedCourseIds([...(previousSelection || [])]);
+            if (reopenPicker) {
+              setTimeout(() => setShowStudentCoursePicker(true), 0);
+            }
+            return;
+          }
+
+          setStudentSelectedCourseIds(finalSelection);
         }}
         title="Enroll Student in Courses"
         description="Select courses for the student to be enrolled in."
