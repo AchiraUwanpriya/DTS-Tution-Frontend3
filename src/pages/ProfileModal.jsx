@@ -26,7 +26,7 @@ const ProfileModal = () => {
   };
 
   return (
-    <Modal isOpen={true} onClose={handleClose} title="Profile">
+    <Modal isOpen={true} onClose={handleClose}>
       <Profile />
     </Modal>
   );

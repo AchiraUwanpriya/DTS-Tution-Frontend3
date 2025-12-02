@@ -149,7 +149,7 @@ const CourseList = ({
                   {/* Course Header with Gradient */}
                   <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-white truncate group-hover:text-indigo-100 transition-colors">
+                      <h3 className="text-sm font-semibold text-white truncate group-hover:text-indigo-100 transition-colors">
                         {course.name}
                       </h3>
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-white/20 text-white backdrop-blur-sm">
@@ -166,7 +166,7 @@ const CourseList = ({
                   <div className="p-6">
                     <div className="space-y-3">
                       {course.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                        <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2">
                           {course.description}
                         </p>
                       )}

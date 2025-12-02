@@ -25,7 +25,7 @@ const Modal = ({
   const computedAriaLabel = showTitle ? undefined : ariaLabel || "Dialog";
 
   const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 sm:px-6 fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center py-3 sm:px-5 fade-in">
       <div
         className="absolute inset-0 bg-black bg-opacity-40"
         onClick={onClose}
@@ -35,11 +35,11 @@ const Modal = ({
         role="dialog"
         aria-modal="true"
         aria-label={computedAriaLabel}
-        className={`relative bg-white dark:bg-gray-800 rounded-lg p-5 sm:p-6 ${widthClass} w-full shadow-xl ring-1 ring-gray-200 dark:ring-0 scale-in soft-shadow-md max-h-[calc(100dvh-3rem)] overflow-y-auto`}
+        className={`relative bg-white dark:bg-gray-800 rounded-lg p-2 sm:p-3 ${widthClass} w-full shadow-xl ring-1 ring-gray-200 dark:ring-0 scale-in soft-shadow-md max-h-[calc(100dvh-3rem)] overflow-y-auto`}
       >
         <div
           className={`flex items-start gap-3 ${
-            showTitle ? "justify-between mb-4" : "justify-end mb-2"
+            showTitle ? "justify-between mb-3" : "justify-end mb-1"
           }`}
         >
           {showTitle ? (

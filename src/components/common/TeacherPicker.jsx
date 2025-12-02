@@ -326,15 +326,15 @@ const TeacherPicker = ({
             ) : null}
           </select>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col  gap-2 sm:flex-row sm:items-center">
           <Button
             type="button"
             variant="secondary"
             onClick={openModal}
             disabled={disabled || loading}
-            className="w-full justify-center sm:w-auto"
+            className="w-full h-10 justify-center   sm:w-auto"
           >
-            + New
+            +New
           </Button>
           {showRefresh && (
             <button

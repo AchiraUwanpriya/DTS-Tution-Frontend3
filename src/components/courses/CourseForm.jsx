@@ -474,7 +474,7 @@ const CourseForm = ({
                     // rely on react-hook-form errors handling; no-op here
                   }
                 }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="mt-1 px-2 py-2 text-xs block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               />
             );
           }}
@@ -496,7 +496,7 @@ const CourseForm = ({
           name="name"
           type="text"
           {...register("name", { required: "Course name is required" })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="mt-1 px-2 py-2 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         {errors.name && (
           <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
@@ -756,7 +756,7 @@ const CourseForm = ({
           {...register("academicYear", {
             required: "Academic year is required",
           })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="mt-1 px-2 py-2 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         {errors.academicYear && (
           <p className="mt-1 text-sm text-red-600">
@@ -777,7 +777,7 @@ const CourseForm = ({
           name="description"
           rows={3}
           {...register("description")}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="mt-1 px-2 py-2 text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
       </div>
 
