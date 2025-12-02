@@ -33,6 +33,33 @@ const resolveStudentId = (student) => {
   return "";
 };
 
+const resolveStudentActive = (student) => {
+  if (!student || typeof student !== "object") return true;
+
+  const raw =
+    student.IsActive ??
+    student.isActive ??
+    (student.UserDetails &&
+      (student.UserDetails.IsActive ?? student.UserDetails.isActive)) ??
+    null;
+
+  if (raw === null || raw === undefined) return true;
+
+  if (typeof raw === "string") {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "active" || normalized === "true" || normalized === "1")
+      return true;
+    if (
+      normalized === "inactive" ||
+      normalized === "false" ||
+      normalized === "0"
+    )
+      return false;
+  }
+
+  return Boolean(raw);
+};
+
 const formatName = (student) => {
   const first =
     student?.FirstName ?? student?.firstName ?? student?.UserDetails?.FirstName;
@@ -193,6 +220,11 @@ const StudentPickerModal = ({
       .map((student) => {
         const sid = resolveStudentId(student);
         if (!sid || excludedSet.has(sid)) {
+          return null;
+        }
+        // Exclude globally inactive users so removed students are not shown
+        // (they will reappear when re-activated)
+        if (!resolveStudentActive(student)) {
           return null;
         }
         const name = formatName(student).toLowerCase();

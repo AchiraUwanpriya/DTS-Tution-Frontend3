@@ -334,11 +334,7 @@ export const getAnnouncementsByTeacher = async (teacherId) => {
     return [];
   }
 
-  const candidateEndpoints = [
-    `/Announcements/teacher/${resolvedId}`,
-    `/Announcements/Teacher/${resolvedId}`,
-    `/Announcements/by-teacher/${resolvedId}`,
-  ];
+  const candidateEndpoints = [];
 
   for (const endpoint of candidateEndpoints) {
     try {

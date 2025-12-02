@@ -1,20 +1,43 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "../../contexts/ThemeContext";
 import Card from "../../components/common/Card";
 import Button from "../../components/common/Button";
 
 const AdminSettings = () => {
   const { theme, toggleTheme } = useTheme();
+  const STORAGE_KEY = "dts_system_settings_v1";
+
   const [systemSettings, setSystemSettings] = useState({
     allowRegistrations: true,
     maintenanceMode: false,
   });
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setSystemSettings((prev) => ({ ...prev, ...parsed }));
+        }
+      }
+    } catch (err) {
+      // ignore parse errors and keep defaults
+      console.warn("Failed to load system settings from localStorage", err);
+    }
+  }, []);
+
   const handleSettingChange = (setting) => {
-    setSystemSettings({
+    const next = {
       ...systemSettings,
       [setting]: !systemSettings[setting],
-    });
+    };
+    setSystemSettings(next);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch (err) {
+      console.warn("Failed to persist system settings", err);
+    }
   };
 
   return (

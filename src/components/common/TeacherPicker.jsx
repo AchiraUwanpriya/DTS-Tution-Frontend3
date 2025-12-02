@@ -9,7 +9,6 @@ import Loader from "./Loader";
 import UserForm from "../users/UserForm";
 import { getAllUsers, createUser } from "../../services/userService";
 import { createTeacher } from "../../services/teacherService";
-import { updateCourse } from "../../services/courseService";
 
 const resolveTeacherId = (candidate) => {
   if (!candidate || typeof candidate !== "object") {
@@ -249,25 +248,7 @@ const TeacherPicker = ({
         TeacherID: createdTeacher?.TeacherID ?? teacherPayload.TeacherID,
       });
 
-      // If courses were selected during creation, assign them now.
-      const courseIds = (merged.CourseIDs || [])
-        .map((id) => {
-          if (id === undefined || id === null) return null;
-          const trimmed = String(id).trim();
-          if (!trimmed) return null;
-          return Number.isNaN(Number(trimmed)) ? trimmed : Number(trimmed);
-        })
-        .filter((id) => id !== null);
-
-      if (teacherId && courseIds.length) {
-        for (const courseId of courseIds) {
-          try {
-            await updateCourse(courseId, { TeacherID: teacherId });
-          } catch (assignErr) {
-            console.error("Failed to assign teacher to course", assignErr);
-          }
-        }
-      }
+      // Purposefully skip course assignment in this flow to avoid triggering updateCourse during teacher creation.
 
       // Refresh list to include the new teacher.
       await fetchTeachers();
@@ -290,7 +271,9 @@ const TeacherPicker = ({
           id: String(teacherId || createdUser?.UserID || createdUser?.id || ""),
           name:
             (createdUser?.FirstName || createdUser?.firstName || "") +
-            (createdUser?.LastName || createdUser?.lastName ? ` ${createdUser?.LastName || createdUser?.lastName}` : ""),
+            (createdUser?.LastName || createdUser?.lastName
+              ? ` ${createdUser?.LastName || createdUser?.lastName}`
+              : ""),
         };
         if (persisted.id) {
           window.localStorage.setItem(

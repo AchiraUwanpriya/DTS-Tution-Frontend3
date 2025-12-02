@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import Cropper from "react-easy-crop";
 import Button from "../common/Button";
@@ -157,6 +157,31 @@ const UserForm = ({
   } = useForm({
     defaultValues: getDefaults(initialUser, forceUserType),
   });
+
+  const resolvedTeacherId = useMemo(() => {
+    const candidates = [
+      teacherId,
+      initialUser?.TeacherID,
+      initialUser?.teacherID,
+      initialUser?.teacherId,
+      initialUser?.UserID,
+      initialUser?.userID,
+      initialUser?.userId,
+      initialUser?.id,
+    ];
+
+    for (const value of candidates) {
+      if (value === undefined || value === null) continue;
+      const str = String(value).trim();
+      if (str) {
+        return str;
+      }
+    }
+
+    return "";
+  }, [teacherId, initialUser]);
+
+  const effectiveTeacherId = resolvedTeacherId || null;
 
   // Async uniqueness checks (soft-fail to true on API error to avoid blocking)
   const isUsernameUnique = async (val) => {
@@ -480,9 +505,19 @@ const UserForm = ({
         // Use local date parts instead of toISOString() to avoid timezone shifts
         const raw =
           u?.EnrollmentDate || u?.enrollmentDate || u?.enrollment_date || "";
-// <<<<<<< HEAD
-        if (!raw) return "";
-// =======
+        // <<<<<<< HEAD
+        if (!raw) {
+          // If no user provided (create mode), default to today's date for usability
+          if (!u) {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, "0");
+            const dd = String(now.getDate()).padStart(2, "0");
+            return `${yyyy}-${mm}-${dd}`;
+          }
+          return "";
+        }
+        // =======
         // if (!raw) {
         //   // If no user provided (create mode), default to today's date for usability
         //   if (!u) {
@@ -494,7 +529,7 @@ const UserForm = ({
         //   }
         //   return "";
         // }
-// >>>>>>> main
+        // >>>>>>> main
         try {
           // If already in YYYY-MM-DD, return as-is
           if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
@@ -737,13 +772,149 @@ const UserForm = ({
 
   const [loadingStudents, setLoadingStudents] = useState(false);
 
+  const courseNameById = useMemo(() => {
+    const map = new Map();
+
+    const registerCourse = (course) => {
+      if (!course) return;
+      const labelCandidates = [
+        course.name,
+        course.CourseName,
+        course.courseName,
+        course.title,
+        course.SubjectName,
+        course.subjectName,
+      ];
+
+      const label = labelCandidates
+        .map((candidate) =>
+          candidate === undefined || candidate === null
+            ? ""
+            : String(candidate).trim()
+        )
+        .find((value) => value.length);
+
+      if (!label) return;
+
+      const idCandidates = [
+        course.id,
+        course.CourseID,
+        course.CourseId,
+        course.courseId,
+        course.courseID,
+        course.ID,
+      ];
+
+      idCandidates.forEach((rawId) => {
+        if (rawId === undefined || rawId === null) return;
+        const key = String(rawId).trim();
+        if (!key) return;
+        if (!map.has(key)) {
+          map.set(key, label);
+        }
+      });
+    };
+
+    const registerMany = (list) => {
+      if (!Array.isArray(list)) return;
+      list.forEach(registerCourse);
+    };
+
+    registerMany(courses);
+    registerMany(initialUser?.Courses);
+    registerMany(initialUser?.AssignedCourses);
+    registerMany(initialUser?.StudentCourses);
+    registerMany(initialUser?.EnrolledCourses);
+    registerMany(initialUser?.TeacherCourses);
+
+    return map;
+  }, [courses, initialUser]);
+
+  // fallback labels fetched from full course list for any ids we don't already know
+  const [fetchedCourseLabels, setFetchedCourseLabels] = useState(
+    () => new Map()
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const idsToCheck = Array.from(
+      new Set([
+        ...(studentSelectedCourseIds || []),
+        ...(selectedCourseIds || []),
+      ])
+    ).map((v) => String(v));
+
+    const missing = idsToCheck.filter((id) => {
+      if (!id) return false;
+      if (courseNameById.has(id)) return false;
+      if (
+        fetchedCourseLabels &&
+        fetchedCourseLabels.has &&
+        fetchedCourseLabels.has(id)
+      )
+        return false;
+      return true;
+    });
+
+    if (!missing.length) return undefined;
+
+    const load = async () => {
+      try {
+        const all = await getAllCourses();
+        if (cancelled) return;
+        const map = new Map(
+          fetchedCourseLabels instanceof Map ? fetchedCourseLabels : []
+        );
+        (all || []).forEach((course) => {
+          if (!course) return;
+          const labelCandidates = [
+            course.name,
+            course.CourseName,
+            course.courseName,
+            course.title,
+            course.SubjectName,
+            course.subjectName,
+          ];
+          const label = labelCandidates
+            .map((c) => (c === undefined || c === null ? "" : String(c).trim()))
+            .find(Boolean);
+          if (!label) return;
+          const idCandidates = [
+            course.id,
+            course.CourseID,
+            course.CourseId,
+            course.courseId,
+            course.courseID,
+            course.ID,
+          ];
+          idCandidates.forEach((rawId) => {
+            if (rawId === undefined || rawId === null) return;
+            const key = String(rawId).trim();
+            if (!key) return;
+            if (!map.has(key)) map.set(key, label);
+          });
+        });
+        setFetchedCourseLabels(map);
+      } catch (e) {
+        // swallow — not critical
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [studentSelectedCourseIds, selectedCourseIds, courseNameById]);
+
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
         setLoadingCourses(true);
-        const all = teacherId
-          ? await getTeacherCourses(teacherId)
+        const all = effectiveTeacherId
+          ? await getTeacherCourses(effectiveTeacherId)
           : await getAllCourses();
         if (!mounted) return;
         setCourses(all || []);
@@ -759,7 +930,7 @@ const UserForm = ({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [effectiveTeacherId]);
 
   useEffect(() => {
     // If creating a new student (userType student and no existing user),
@@ -1410,7 +1581,7 @@ const UserForm = ({
                     {studentSelectedCourseIds.length ? (
                       <ul className="flex flex-wrap gap-2">
                         {studentSelectedCourseIds.map((cid) => {
-                          const c = (courses || []).find(
+                          const matchingCourse = (courses || []).find(
                             (x) =>
                               String(
                                 x.id ??
@@ -1421,10 +1592,13 @@ const UserForm = ({
                               ) === String(cid)
                           );
                           const label =
-                            c?.name ||
-                            c?.CourseName ||
-                            c?.title ||
-                            c?.courseName ||
+                            (fetchedCourseLabels &&
+                              fetchedCourseLabels.get(String(cid))) ||
+                            courseNameById.get(String(cid)) ||
+                            matchingCourse?.name ||
+                            matchingCourse?.CourseName ||
+                            matchingCourse?.title ||
+                            matchingCourse?.courseName ||
                             `Course ${cid}`;
                           return (
                             <li
@@ -1616,7 +1790,7 @@ const UserForm = ({
                   {selectedCourseIds.length ? (
                     <ul className="flex flex-wrap gap-2">
                       {selectedCourseIds.map((cid) => {
-                        const c = (courses || []).find(
+                        const matchingCourse = (courses || []).find(
                           (x) =>
                             String(
                               x.id ??
@@ -1627,10 +1801,13 @@ const UserForm = ({
                             ) === String(cid)
                         );
                         const label =
-                          c?.name ||
-                          c?.CourseName ||
-                          c?.title ||
-                          c?.courseName ||
+                          (fetchedCourseLabels &&
+                            fetchedCourseLabels.get(String(cid))) ||
+                          courseNameById.get(String(cid)) ||
+                          matchingCourse?.name ||
+                          matchingCourse?.CourseName ||
+                          matchingCourse?.title ||
+                          matchingCourse?.courseName ||
                           `Course ${cid}`;
                         return (
                           <li
@@ -1694,8 +1871,17 @@ const UserForm = ({
             try {
               // If a teacherId was provided to this form, ensure the
               // created course is associated with that teacher.
-              const payload = teacherId
-                ? { ...data, TeacherID: teacherId, teacherId }
+              const numericTeacherId = Number(effectiveTeacherId);
+              const payload = effectiveTeacherId
+                ? {
+                    ...data,
+                    TeacherID: Number.isNaN(numericTeacherId)
+                      ? effectiveTeacherId
+                      : numericTeacherId,
+                    teacherId: Number.isNaN(numericTeacherId)
+                      ? effectiveTeacherId
+                      : numericTeacherId,
+                  }
                 : data;
               const newCourse = await createCourse(payload);
               // ensure id is represented as string
@@ -1796,71 +1982,130 @@ const UserForm = ({
         description="Choose one or more courses to assign to this teacher."
         multiSelect={true}
         allowCreate={true}
-        teacherId={teacherId}
+        teacherId={effectiveTeacherId || undefined}
+        scopeToTeacher={false}
+        hideAssignedToOtherTeachers={true}
       />
 
       <CoursePickerModal
         isOpen={showStudentCoursePicker}
         onClose={() => setShowStudentCoursePicker(false)}
         initialSelected={studentSelectedCourseIds}
-// <<<<<<< HEAD
-//         onProceed={async (ids) => {
-//           const dedupeIds = (list) =>
-//             Array.from(
-//               new Set(
-//                 (list || [])
-//                   .map((value) => String(value))
-//                   .map((value) => value.trim())
-//                   .filter(Boolean)
-//               )
-//             );
+        // <<<<<<< HEAD
+        //         onProceed={async (ids) => {
+        //           const dedupeIds = (list) =>
+        //             Array.from(
+        //               new Set(
+        //                 (list || [])
+        //                   .map((value) => String(value))
+        //                   .map((value) => value.trim())
+        //                   .filter(Boolean)
+        //               )
+        //             );
 
-//           const previousSelection = studentSelectedCourseIds;
-//           const normalizedSelection = dedupeIds(ids);
+        //           const previousSelection = studentSelectedCourseIds;
+        //           const normalizedSelection = dedupeIds(ids);
 
-//           let accepted = true;
-//           let finalSelection = normalizedSelection;
+        //           let accepted = true;
+        //           let finalSelection = normalizedSelection;
 
-//           if (typeof onStudentCourseSelectionChange === "function") {
-//             try {
-//               const result = await onStudentCourseSelectionChange(
-//                 [...normalizedSelection],
-//                 [...previousSelection]
-//               );
+        //           if (typeof onStudentCourseSelectionChange === "function") {
+        //             try {
+        //               const result = await onStudentCourseSelectionChange(
+        //                 [...normalizedSelection],
+        //                 [...previousSelection]
+        //               );
 
-//               if (Array.isArray(result)) {
-//                 finalSelection = dedupeIds(result);
-//               } else if (result && typeof result === "object") {
-//                 if (result.accepted === false) {
-//                   accepted = false;
-//                 }
-//                 if (Array.isArray(result.finalIds)) {
-//                   finalSelection = dedupeIds(result.finalIds);
-//                 }
-//               } else if (result === false) {
-//                 accepted = false;
-//               }
-//             } catch (handlerError) {
-//               console.error(
-//                 "Student course selection handler failed",
-//                 handlerError
-//               );
-//               accepted = false;
-//             }
-//           }
+        //               if (Array.isArray(result)) {
+        //                 finalSelection = dedupeIds(result);
+        //               } else if (result && typeof result === "object") {
+        //                 if (result.accepted === false) {
+        //                   accepted = false;
+        //                 }
+        //                 if (Array.isArray(result.finalIds)) {
+        //                   finalSelection = dedupeIds(result.finalIds);
+        //                 }
+        //               } else if (result === false) {
+        //                 accepted = false;
+        //               }
+        //             } catch (handlerError) {
+        //               console.error(
+        //                 "Student course selection handler failed",
+        //                 handlerError
+        //               );
+        //               accepted = false;
+        //             }
+        //           }
 
-//           if (!accepted) {
-//             setStudentSelectedCourseIds([...(previousSelection || [])]);
-//             setShowStudentCoursePicker(false);
-//             return;
-//           }
+        //           if (!accepted) {
+        //             setStudentSelectedCourseIds([...(previousSelection || [])]);
+        //             setShowStudentCoursePicker(false);
+        //             return;
+        //           }
 
-//           setStudentSelectedCourseIds(finalSelection);
-// =======
-        onProceed={(ids) => {
-          setStudentSelectedCourseIds(ids.map((v) => String(v)));
-// >>>>>>> main
+        //           setStudentSelectedCourseIds(finalSelection);
+        // =======
+        onProceed={async (ids) => {
+          const dedupeIds = (list) =>
+            Array.from(
+              new Set(
+                (list || [])
+                  .map((value) => String(value))
+                  .map((value) => value.trim())
+                  .filter(Boolean)
+              )
+            );
+
+          const previousSelection = [...(studentSelectedCourseIds || [])];
+          const normalizedSelection = dedupeIds(ids);
+
           setShowStudentCoursePicker(false);
+
+          let accepted = true;
+          let finalSelection = [...normalizedSelection];
+          let reopenPicker = false;
+
+          if (typeof onStudentCourseSelectionChange === "function") {
+            try {
+              const result = await onStudentCourseSelectionChange(
+                [...normalizedSelection],
+                [...previousSelection]
+              );
+
+              if (Array.isArray(result)) {
+                finalSelection = dedupeIds(result);
+              } else if (result && typeof result === "object") {
+                if (result.accepted === false) {
+                  accepted = false;
+                }
+                if (Array.isArray(result.finalIds)) {
+                  finalSelection = dedupeIds(result.finalIds);
+                }
+                if (result.reopenPicker) {
+                  reopenPicker = true;
+                }
+              } else if (result === false) {
+                accepted = false;
+              }
+            } catch (handlerError) {
+              console.error(
+                "Student course selection handler failed",
+                handlerError
+              );
+              accepted = false;
+              reopenPicker = true;
+            }
+          }
+
+          if (!accepted) {
+            setStudentSelectedCourseIds([...(previousSelection || [])]);
+            if (reopenPicker) {
+              setTimeout(() => setShowStudentCoursePicker(true), 0);
+            }
+            return;
+          }
+
+          setStudentSelectedCourseIds(finalSelection);
         }}
         title="Enroll Student in Courses"
         description="Select courses for the student to be enrolled in."
@@ -1880,7 +2125,7 @@ const UserForm = ({
         : null}
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
-{/* <<<<<<< HEAD */}
+        {/* <<<<<<< HEAD */}
         {/* Reset button commented out per request; replaced with Back when provided */}
         {false && (
           <Button
@@ -1902,7 +2147,7 @@ const UserForm = ({
             Back
           </Button>
         ) : null}
-{/* ======= */}
+        {/* ======= */}
         {/* <Button
           type="button"
           variant="secondary"
@@ -1910,8 +2155,8 @@ const UserForm = ({
           className="w-full justify-center sm:w-auto"
         >
           Reset
-        </Button> */} 
-{/* >>>>>>> main */}
+        </Button> */}
+        {/* >>>>>>> main */}
         {onCancel && (
           <Button
             type="button"
