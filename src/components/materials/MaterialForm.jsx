@@ -153,6 +153,29 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
       setIsLoading(true);
       setError("");
       let fallbackFileUrl;
+      const resolveSubjectSelection = () => {
+        if (!selectedSubject) {
+          return { id: null, name: "" };
+        }
+
+        const selectedEntry = subjects.find(
+          (subject) => String(subject.id) === String(selectedSubject)
+        );
+
+        const rawId = selectedSubject;
+        const numericCandidate = Number(rawId);
+        const resolvedId = Number.isNaN(numericCandidate)
+          ? rawId
+          : numericCandidate;
+
+        return {
+          id: resolvedId,
+          name: selectedEntry?.name ?? "",
+        };
+      };
+
+      const { id: resolvedSubjectId, name: resolvedSubjectName } =
+        resolveSubjectSelection();
       const getFallbackFileUrl = () => {
         if (!fallbackFileUrl) {
           fallbackFileUrl = URL.createObjectURL(file);
@@ -179,7 +202,35 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
         IsVisible: true,
       };
 
-      const createdMaterial = await uploadMaterial(apiPayload);
+      if (
+        resolvedSubjectId !== null &&
+        resolvedSubjectId !== undefined &&
+        resolvedSubjectId !== ""
+      ) {
+        apiPayload.SubjectID = resolvedSubjectId;
+      }
+
+      if (resolvedSubjectName) {
+        apiPayload.SubjectName = resolvedSubjectName;
+      }
+
+      const createdMaterial = await uploadMaterial(apiPayload, file);
+
+      const finalSubjectId =
+        createdMaterial?.subjectId ??
+        createdMaterial?.SubjectID ??
+        createdMaterial?.SubjectId ??
+        createdMaterial?.subjectID ??
+        resolvedSubjectId ??
+        null;
+      const finalSubjectName = (
+        createdMaterial?.subjectName ??
+        createdMaterial?.SubjectName ??
+        createdMaterial?.subjectTitle ??
+        createdMaterial?.SubjectTitle ??
+        resolvedSubjectName ??
+        ""
+      ).toString();
 
       const materialResult = createdMaterial
         ? {
@@ -200,6 +251,10 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
               createdMaterial.teacherId ??
               createdMaterial.TeacherID ??
               resolvedTeacherId,
+            subjectId: finalSubjectId,
+            SubjectID: finalSubjectId,
+            subjectName: finalSubjectName,
+            SubjectName: finalSubjectName,
           }
         : {
             id: Math.random().toString(36).substring(7),
@@ -211,11 +266,41 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
             uploadDate: new Date().toISOString(),
             courseId: resolvedCourseId,
             teacherId: resolvedTeacherId,
+            subjectId: resolvedSubjectId ?? null,
+            SubjectID: resolvedSubjectId ?? null,
+            subjectName: resolvedSubjectName ?? "",
+            SubjectName: resolvedSubjectName ?? "",
           };
 
       onSuccess(materialResult);
+
+      // Emit a global event so parent/other views can refresh using per-subject API
+      try {
+        const dispatchedCourseId =
+          materialResult?.courseId ??
+          materialResult?.CourseID ??
+          resolvedCourseId;
+        const dispatchedSubjectId =
+          materialResult?.subjectId ??
+          materialResult?.SubjectID ??
+          resolvedSubjectId ??
+          null;
+
+        if (typeof window !== "undefined" && window && window.dispatchEvent) {
+          const ev = new CustomEvent("studyMaterial:uploaded", {
+            detail: {
+              courseId: dispatchedCourseId,
+              subjectId: dispatchedSubjectId,
+            },
+          });
+          window.dispatchEvent(ev);
+        }
+      } catch (e) {
+        // non-fatal if event can't be dispatched
+      }
       reset({ title: "", description: "" });
       setFile(null);
+      setSelectedSubject("");
     } catch (err) {
       setError("Failed to upload material. Please try again.");
     } finally {
@@ -335,7 +420,6 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
           >
             <option value="">-- Select a class --</option>
             {subjects.map((subject) => {
-              console.log("Subject:", subject); // { id: 8060, name: "Networking" }
               const subjectId = String(subject.id);
               const subjectLabel = subject.name;
 
