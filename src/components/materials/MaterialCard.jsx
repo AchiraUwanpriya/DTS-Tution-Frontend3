@@ -1,10 +1,9 @@
 import { formatDate } from "../../utils/helpers";
 import { getFileType } from "../../utils/helpers";
 
-const resolveMaterialId = (m) => {
-  const candidate =
-    m?.MaterialID ?? m?.materialID ?? m?.materialId ?? m?.id ?? null;
-  return candidate != null ? String(candidate) : null;
+
+const resolveMaterialId = (material) => {
+  return material?.id ?? null;
 };
 
 const MaterialCard = ({ material }) => {
@@ -21,42 +20,61 @@ const MaterialCard = ({ material }) => {
 
   const mid = resolveMaterialId(material);
   const serverDownloadAvailable = Boolean(mid);
-  const handleDownload = async (ev) => {
-    try {
-      if (ev && typeof ev.preventDefault === "function") ev.preventDefault();
-      if (!mid) return;
-      // Prefer server download endpoint. If it navigates/streams the file, this will trigger download.
-      const downloadUrl = `/studymaterials/download/${encodeURIComponent(mid)}`;
-      try {
-        // Try opening in a new tab/window first (works for many servers that redirect to file)
-        window.open(downloadUrl, "_blank");
-        return;
-      } catch (e) {
-        // fallback to fetch-and-download
+  
+  const handleDocDownload = async(material) => {
+    
+   const materialId = resolveMaterialId(material);
+    
+    if (!materialId) {
+      console.warn("No material ID found for download");
+      return;
+    }
+
+     try {
+      // Use the backend download endpoint with material ID
+      const downloadUrl = `http://localhost:50447/api/studymaterials/download/${materialId}`;
+      const response = await fetch(downloadUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
       }
 
-      try {
-        const resp = await fetch(downloadUrl, { method: "GET" });
-        if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = material.filePath || material.FilePath || "download";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        return;
-      } catch (errFetch) {
-        throw errFetch;
+      // Convert the raw binary response to a blob
+      const blob = await response.blob();
+      
+      // Get filename from content-disposition header or create a default one
+      let filename = `material_${materialId}`;
+      const contentDisposition = response.headers.get('content-disposition');
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
       }
-    } catch (err) {
-      console.error("Download failed", err);
-      try {
-        if (downloadHref) window.open(downloadHref, "_blank");
-      } catch (e) {}
-      alert("Failed to download file. See console for details.");
+
+      // If no filename from header, try to get it from material data
+      if (!contentDisposition && material) {
+        const title = material.title || material.Title || 'material';
+        const fileType = material.fileType || material.FileType || 'file';
+        filename = `${title}.${fileType}`;
+      }
+
+      // Create download link and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Download failed. Please try again.");
     }
   };
 
@@ -89,8 +107,8 @@ const MaterialCard = ({ material }) => {
       </div>
       <div className="bg-gray-50 dark:bg-gray-700 px-4 py-4 sm:px-6 text-right">
         <a
-          href={downloadHref || undefined}
-          onClick={serverDownloadAvailable ? handleDownload : undefined}
+          
+          onClick={() => handleDocDownload(material)}
           download={Boolean(downloadHref) || undefined}
           className={`inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
             downloadHref ? "" : "pointer-events-none opacity-60"
