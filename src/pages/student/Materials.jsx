@@ -3,8 +3,8 @@ import { useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { getCourseDetails } from "../../services/courseService";
 import {
-  getCourseMaterials,
   getStudentMaterials,
+  getCourseMaterialsBySubject,
 } from "../../services/materialService";
 import { getStudentCourses } from "../../services/courseService";
 import MaterialList from "../../components/materials/MaterialList";
@@ -20,6 +20,142 @@ import {
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 
+const DEFAULT_SUBJECT_LABEL = "Uncategorized Subject";
+const SUBJECT_UNKNOWN_KEY = "__unknown_subject__";
+
+const resolveSubjectId = (material) => {
+  const candidate =
+    material?.subjectId ??
+    material?.SubjectID ??
+    material?.SubjectId ??
+    material?.subjectID ??
+    material?.raw?.SubjectID ??
+    material?.raw?.SubjectId ??
+    material?.raw?.subjectID ??
+    material?.raw?.subjectId ??
+    material?.raw?.Subject?.SubjectID ??
+    material?.raw?.Subject?.SubjectId ??
+    material?.raw?.Subject?.subjectID ??
+    material?.raw?.Subject?.subjectId ??
+    null;
+
+  if (candidate === null || candidate === undefined) return null;
+  const asString = String(candidate).trim();
+  return asString ? asString : null;
+};
+
+const resolveSubjectName = (material) => {
+  const candidateStrings = [
+    material?.subjectName,
+    material?.SubjectName,
+    material?.subjectTitle,
+    material?.SubjectTitle,
+    material?.subjectLabel,
+    material?.SubjectLabel,
+    material?.subjectDescription,
+    material?.SubjectDescription,
+    material?.subjectCode,
+    material?.SubjectCode,
+    material?.raw?.SubjectName,
+    material?.raw?.subjectName,
+  ];
+
+  for (const value of candidateStrings) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+
+  const subjectObjects = [
+    material?.subject,
+    material?.Subject,
+    material?.raw?.Subject,
+    material?.raw?.subject,
+    material?.raw?.SubjectDetails,
+    material?.raw?.subjectDetails,
+    material?.raw?.Class,
+    material?.raw?.class,
+  ];
+
+  for (const subject of subjectObjects) {
+    if (typeof subject === "string") {
+      const trimmed = subject.trim();
+      if (trimmed) return trimmed;
+      continue;
+    }
+
+    if (subject && typeof subject === "object") {
+      const nestedCandidates = [
+        subject.SubjectName,
+        subject.subjectName,
+        subject.Name,
+        subject.name,
+        subject.Title,
+        subject.title,
+        subject.Label,
+        subject.label,
+        subject.Description,
+        subject.description,
+        subject.Code,
+        subject.code,
+      ];
+      for (const value of nestedCandidates) {
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (trimmed) return trimmed;
+        }
+      }
+    }
+  }
+
+  return "";
+};
+
+const groupMaterialsBySubject = (materials = []) => {
+  const list = Array.isArray(materials) ? materials : [];
+  if (!list.length) return [];
+
+  const groups = new Map();
+
+  for (const material of list) {
+    if (!material) continue;
+    const subjectId = resolveSubjectId(material);
+    const resolvedName = resolveSubjectName(material);
+    const subjectName =
+      resolvedName ||
+      (subjectId ? `Subject ${subjectId}` : DEFAULT_SUBJECT_LABEL);
+    const key = subjectId
+      ? `id:${subjectId}`
+      : resolvedName
+      ? `name:${resolvedName.toLowerCase()}`
+      : SUBJECT_UNKNOWN_KEY;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        subjectId: subjectId,
+        subjectName,
+        subjectKey: key,
+        materials: [],
+      });
+    }
+
+    groups.get(key).materials.push(material);
+  }
+
+  const compareGroups = (a, b) => {
+    const isAUnknown = a.subjectKey === SUBJECT_UNKNOWN_KEY;
+    const isBUnknown = b.subjectKey === SUBJECT_UNKNOWN_KEY;
+    if (isAUnknown && !isBUnknown) return 1;
+    if (!isAUnknown && isBUnknown) return -1;
+    const nameA = (a.subjectName || DEFAULT_SUBJECT_LABEL).toLowerCase();
+    const nameB = (b.subjectName || DEFAULT_SUBJECT_LABEL).toLowerCase();
+    return nameA.localeCompare(nameB);
+  };
+
+  return Array.from(groups.values()).sort(compareGroups);
+};
+
 const StudentMaterials = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -34,12 +170,45 @@ const StudentMaterials = () => {
     const fetchData = async () => {
       try {
         if (id) {
-          const [materialsData, courseData] = await Promise.all([
-            getCourseMaterials(id),
-            getCourseDetails(id),
-          ]);
-          setMaterials(materialsData);
+          // For a single course view, try to fetch materials per-subject when subjects exist
+          const courseData = await getCourseDetails(id).catch(() => null);
           setCourse(courseData);
+
+          const subjectIds =
+            (courseData &&
+              (courseData.subjectIds ??
+                courseData.SubjectIDs ??
+                courseData.SubjectIds ??
+                courseData.subjectIDs)) ||
+            [];
+
+          let merged = [];
+
+          if (Array.isArray(subjectIds) && subjectIds.length) {
+            const subjectIdStrings = subjectIds.map((s) => String(s));
+            const fetches = subjectIdStrings.map((sid) =>
+              getCourseMaterialsBySubject(id, sid).catch(() => [])
+            );
+
+            const perSubjectArrays = await Promise.all(fetches).catch(() => []);
+
+            const seen = new Set();
+            for (const arr of perSubjectArrays) {
+              for (const m of Array.isArray(arr) ? arr : []) {
+                const mid = m?.id ?? m?.MaterialID ?? m?.materialId ?? null;
+                const key = mid != null ? String(mid) : JSON.stringify(m);
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  merged.push(m);
+                }
+              }
+            }
+          } else {
+            // No subject ids available; do not call course-level API per requirements.
+            merged = [];
+          }
+
+          setMaterials(merged);
         } else {
           // No specific course id: load materials grouped by the logged-in student's courses
           const studentId =
@@ -67,20 +236,63 @@ const StudentMaterials = () => {
                 }))
               );
 
-              // Fetch materials per-course and update state as they resolve
+              // Fetch materials per-course and update state as they resolve.
+              // Try per-subject API when course subjects are available.
               courses.forEach(async (c) => {
+                const courseId = c.id ?? c.CourseID ?? c.courseId;
                 try {
-                  const mats = await getCourseMaterials(
-                    c.id ?? c.CourseID ?? c.courseId
-                  );
+                  let merged = [];
+
+                  // fetch course details to discover subjects
+                  const details = await getCourseDetails(
+                    String(courseId)
+                  ).catch(() => null);
+                  const subjectIds =
+                    (details &&
+                      (details.subjectIds ??
+                        details.SubjectIDs ??
+                        details.SubjectIds ??
+                        details.subjectIDs)) ||
+                    [];
+
+                  if (Array.isArray(subjectIds) && subjectIds.length) {
+                    const subjectIdStrings = subjectIds.map((s) => String(s));
+                    const fetches = subjectIdStrings.map((sid) =>
+                      getCourseMaterialsBySubject(String(courseId), sid).catch(
+                        () => []
+                      )
+                    );
+
+                    const perSubjectArrays = await Promise.all(fetches).catch(
+                      () => []
+                    );
+
+                    const seen = new Set();
+                    for (const arr of perSubjectArrays) {
+                      for (const m of Array.isArray(arr) ? arr : []) {
+                        const mid =
+                          m?.id ?? m?.MaterialID ?? m?.materialId ?? null;
+                        const key =
+                          mid != null ? String(mid) : JSON.stringify(m);
+                        if (!seen.has(key)) {
+                          seen.add(key);
+                          merged.push(m);
+                        }
+                      }
+                    }
+                  } else {
+                    // No subject ids available; do not call course-level API per requirements.
+                    merged = [];
+                  }
+
                   setGroupedMaterials((prev) =>
                     prev.map((g) =>
                       String(
                         g.course?.id ?? g.course?.CourseID ?? g.course?.courseId
-                      ) === String(c.id ?? c.CourseID ?? c.courseId)
+                      ) === String(courseId)
                         ? {
                             ...g,
-                            materials: Array.isArray(mats) ? mats : [],
+                            materials: Array.isArray(merged) ? merged : [],
                             loading: false,
                           }
                         : g
@@ -91,7 +303,7 @@ const StudentMaterials = () => {
                     prev.map((g) =>
                       String(
                         g.course?.id ?? g.course?.CourseID ?? g.course?.courseId
-                      ) === String(c.id ?? c.CourseID ?? c.courseId)
+                      ) === String(courseId)
                         ? { ...g, materials: [], loading: false }
                         : g
                     )
@@ -206,8 +418,37 @@ const StudentMaterials = () => {
 
       <section className="relative rounded-2xl border border-dashed border-gray-200 bg-white/95 px-4 py-6 shadow-sm transition dark:border-gray-700 dark:bg-gray-900/60 sm:px-8 sm:py-8">
         {id ? (
+          // Single course view: group materials by subject similar to teacher view
           materials.length > 0 ? (
-            <MaterialList materials={materials} className="bg-transparent" />
+            (() => {
+              const subjectGroups = groupMaterialsBySubject(materials);
+              return subjectGroups.length ? (
+                <div className="space-y-4 sm:space-y-6">
+                  {subjectGroups.map((group) => (
+                    <div key={group.subjectKey} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                          {group.subjectName}
+                        </h3>
+                        <span className="text-xs font-medium text-indigo-600 dark:text-indigo-300">
+                          {group.materials.length} material
+                          {group.materials.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <MaterialList
+                        materials={group.materials}
+                        compact={false}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <MaterialList
+                  materials={materials}
+                  className="bg-transparent"
+                />
+              );
+            })()
           ) : (
             <EmptyState
               title="No Materials Available"
@@ -300,7 +541,39 @@ const StudentMaterials = () => {
                             <Loader />
                           </div>
                         ) : (
-                          <MaterialList materials={mats} compact={true} />
+                          (() => {
+                            const subjectGroups = groupMaterialsBySubject(
+                              mats || []
+                            );
+                            return subjectGroups.length ? (
+                              <div className="space-y-3">
+                                {subjectGroups.map((group) => (
+                                  <div
+                                    key={group.subjectKey}
+                                    className="space-y-3"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                        {group.subjectName}
+                                      </h4>
+                                      <span className="text-xs font-medium text-indigo-600 dark:text-indigo-300">
+                                        {group.materials.length} material
+                                        {group.materials.length === 1
+                                          ? ""
+                                          : "s"}
+                                      </span>
+                                    </div>
+                                    <MaterialList
+                                      materials={group.materials}
+                                      compact={true}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <MaterialList materials={mats} compact={true} />
+                            );
+                          })()
                         )}
                       </div>
                     )}
