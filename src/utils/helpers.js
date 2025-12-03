@@ -57,6 +57,27 @@ export const capitalize = (str) => {
   return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
+const normalizeIdentifier = (value) => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return String(value);
+  }
+
+  const text = String(value).trim();
+  if (!text) {
+    return null;
+  }
+
+  if (/^-?\d+$/.test(text) && !/^0\d+/.test(text)) {
+    return String(Number(text));
+  }
+
+  return text;
+};
+
 export const collectCourseIdsForStudent = (courses, fallbackCourseId) => {
   const ids = new Set();
 
@@ -65,12 +86,17 @@ export const collectCourseIdsForStudent = (courses, fallbackCourseId) => {
       return;
     }
 
-    const text = String(value).trim();
-    if (!text) {
+    if (Array.isArray(value)) {
+      value.forEach(addId);
       return;
     }
 
-    ids.add(text);
+    const normalized = normalizeIdentifier(value);
+    if (!normalized) {
+      return;
+    }
+
+    ids.add(normalized);
   };
 
   if (Array.isArray(courses)) {
@@ -101,4 +127,116 @@ export const collectCourseIdsForStudent = (courses, fallbackCourseId) => {
   }
 
   return Array.from(ids);
+};
+
+const addSubjectIdCandidate = (value, target) => {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => addSubjectIdCandidate(item, target));
+    return;
+  }
+
+  const normalized = normalizeIdentifier(value);
+  if (!normalized) {
+    return;
+  }
+
+  if (!target.has(normalized)) {
+    target.set(normalized, normalized);
+  }
+};
+
+const inspectSubjectCandidate = (candidate, target) => {
+  if (!candidate) {
+    return;
+  }
+
+  if (Array.isArray(candidate)) {
+    candidate.forEach((entry) => inspectSubjectCandidate(entry, target));
+    return;
+  }
+
+  if (typeof candidate === "object") {
+    addSubjectIdCandidate(
+      [
+        candidate.SubjectID,
+        candidate.subjectID,
+        candidate.SubjectId,
+        candidate.subjectId,
+        candidate.SubjectIDValue,
+        candidate.subjectIDValue,
+        candidate.id,
+        candidate.Id,
+        candidate.value,
+      ],
+      target
+    );
+
+    inspectSubjectCandidate(candidate.Subject, target);
+    inspectSubjectCandidate(candidate.subject, target);
+    inspectSubjectCandidate(candidate.SubjectDetails, target);
+    inspectSubjectCandidate(candidate.subjectDetails, target);
+    inspectSubjectCandidate(candidate.SubjectInfo, target);
+    inspectSubjectCandidate(candidate.subjectInfo, target);
+    inspectSubjectCandidate(candidate.SubjectData, target);
+    inspectSubjectCandidate(candidate.subjectData, target);
+
+    return;
+  }
+
+  addSubjectIdCandidate(candidate, target);
+};
+
+const appendCourseSubjectIds = (course, target) => {
+  if (!course || typeof course !== "object") {
+    return;
+  }
+
+  const directLists = [
+    course.SubjectIDs,
+    course.subjectIDs,
+    course.SubjectIds,
+    course.subjectIds,
+  ];
+
+  directLists.forEach((entry) => inspectSubjectCandidate(entry, target));
+
+  addSubjectIdCandidate(
+    [course.SubjectID, course.subjectID, course.SubjectId, course.subjectId],
+    target
+  );
+
+  const nestedCollections = [
+    course.courseSubjects,
+    course.CourseSubjects,
+    course.subjects,
+    course.Subjects,
+    course.subjectList,
+    course.SubjectList,
+  ];
+
+  nestedCollections.forEach((entry) => inspectSubjectCandidate(entry, target));
+
+  inspectSubjectCandidate(course.subject, target);
+  inspectSubjectCandidate(course.Subject, target);
+  inspectSubjectCandidate(course.subjectDetails, target);
+  inspectSubjectCandidate(course.SubjectDetails, target);
+};
+
+export const collectSubjectIdsForStudent = (
+  courses = [],
+  fallbackSubjects = []
+) => {
+  const subjectIds = new Map();
+
+  if (Array.isArray(courses)) {
+    courses.forEach((course) => appendCourseSubjectIds(course, subjectIds));
+  }
+
+  inspectSubjectCandidate(fallbackSubjects, subjectIds);
+
+  return Array.from(subjectIds.values());
 };

@@ -370,7 +370,6 @@
 //             d="M2.25 6.75A2.25 2.25 0 014.5 4.5h3a2.25 2.25 0 012.25 2.25v1.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 004.5 12v0c0 4.556 3.694 8.25 8.25 8.25v0a2.25 2.25 0 002.25-2.25v-1.5A2.25 2.25 0 0012.75 14.25H11.25A2.25 2.25 0 019 12v0"
 // =======
 
-
 // import { useMemo, useState, useEffect } from "react";
 // import { useAuth } from "../contexts/AuthContext";
 // import Avatar from "../components/common/Avatar";
@@ -709,14 +708,14 @@
 //                   </div>
 //                 </div>
 //               </div>
-              
+
 //               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
 //                 {displayName}
 //               </h2>
 //               <p className="text-gray-600 dark:text-gray-400 mb-6">
 //                 {email}
 //               </p>
-              
+
 //               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl p-4 border border-blue-100 dark:border-blue-800/30">
 //                 <div className="flex items-center justify-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">
 //                   <Icon name="badge" className="w-4 h-4" />
@@ -734,7 +733,7 @@
 //                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 text-center">
 //                   Student QR Code
 //                 </h3>
-                
+
 //                 <div className="flex flex-col items-center gap-4">
 //                   {studentQR ? (
 //                     <>
@@ -790,15 +789,15 @@
 
 //               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 //                 {fields.map((field, index) => (
-//                   <div 
+//                   <div
 //                     key={field.key}
 //                     className="group bg-gradient-to-br from-white to-blue-50/50 dark:from-gray-800 dark:to-blue-900/10 rounded-2xl p-6 border border-gray-100 dark:border-gray-700/50 hover:border-blue-200 dark:hover:border-blue-800/50 transition-all duration-300 hover:shadow-md"
 //                   >
 //                     <div className="flex items-start gap-4">
 //                       <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
-//                         <Icon 
-//                           name={field.icon} 
-//                           className="w-5 h-5 text-blue-600 dark:text-blue-400" 
+//                         <Icon
+//                           name={field.icon}
+//                           className="w-5 h-5 text-blue-600 dark:text-blue-400"
 //                         />
 //                       </div>
 //                       <div className="flex-1 min-w-0">
@@ -1031,7 +1030,6 @@ const Profile = () => {
     `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
     user?.name ||
     user?.fullName ||
-    
     ""
   ).trim();
   const email = user?.email || user?.Email || user?.username || "-";
@@ -1186,7 +1184,7 @@ const Profile = () => {
           <div className="lg:col-span-3 space-y-4 sm:space-y-5">
             {/* Profile Card */}
             <div className="bg-white/90 dark:bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-lg border border-white/60 dark:border-gray-800/70 p-5 sm:p-6 text-center">
-                 <div className="flex justify-center mb-4 sm:mb-5">
+              <div className="flex justify-center mb-4 sm:mb-5">
                 <div className="relative inline-block">
                   <Avatar
                     name={displayName}
@@ -1245,14 +1243,14 @@ const Profile = () => {
                       <a
                         href={studentQR}
                         download={`student-${
-                          user?.id ||
-                          user?.studentId ||
-                          user?.StudentID ||
-                          "qr"
+                          user?.id || user?.studentId || user?.StudentID || "qr"
                         }.png`}
                         className="w-full inline-flex items-center justify-center gap-2 sm:gap-2.5 px-4 sm:px-5 py-2.5 text-xs sm:text-sm md:text-base font-semibold rounded-xl shadow-md transition-all duration-200 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transform hover:-translate-y-0.5"
                       >
-                        <Icon name="download" className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <Icon
+                          name="download"
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
                         Download QR Code
                       </a>
                     </>
@@ -1387,4 +1385,3 @@ const Profile = () => {
 };
 
 export default Profile;
-
