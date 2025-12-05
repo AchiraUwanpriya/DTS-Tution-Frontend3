@@ -1,44 +1,64 @@
-import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
-import { useAuth } from '../../contexts/AuthContext'
-import { getCourseDetails } from '../../services/courseService'
-import { getCourseAttendance } from '../../services/attendanceService'
-import AttendanceList from '../../components/attendance/AttendanceList'
-import QRGenerator from '../../components/attendance/QRGenerator'
-import EmptyState from '../../components/common/EmptyState'
-import Loader from '../../components/common/Loader'
-import QRScanner from '../../components/attendance/QRScanner'
+import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import { getCourseDetails } from "../../services/courseService";
+import { getCourseAttendance } from "../../services/attendanceService";
+import { getAllClassSchedules } from "../../services/classScheduleService";
+import AttendanceList from "../../components/attendance/AttendanceList";
+import Loader from "../../components/common/Loader";
+import QRScanner from "../../components/attendance/QRScanner";
 
 const TeacherAttendance = () => {
-  const { id } = useParams()
-  const { user } = useAuth()
-  const [attendance, setAttendance] = useState([])
-  const [course, setCourse] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { id } = useParams();
+  const [attendance, setAttendance] = useState([]);
+  const [course, setCourse] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [schedules, setSchedules] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         if (id) {
-          const [attendanceData, courseData] = await Promise.all([
+          const [attendanceData, courseData, scheduleData] = await Promise.all([
             getCourseAttendance(id),
-            getCourseDetails(id)
-          ])
-          setAttendance(attendanceData)
-          setCourse(courseData)
+            getCourseDetails(id),
+            getAllClassSchedules(),
+          ]);
+          setAttendance(attendanceData);
+          setCourse(courseData);
+          const filteredSchedules = Array.isArray(scheduleData)
+            ? scheduleData.filter((schedule) => {
+                const scheduleCourseId =
+                  schedule?.courseId ??
+                  schedule?.CourseID ??
+                  schedule?.courseID ??
+                  schedule?.CourseId ??
+                  schedule?.raw?.CourseID ??
+                  schedule?.raw?.courseID ??
+                  schedule?.raw?.CourseId ??
+                  schedule?.raw?.courseId ??
+                  null;
+                if (scheduleCourseId === null || scheduleCourseId === undefined)
+                  return false;
+                return String(scheduleCourseId) === String(id);
+              })
+            : [];
+          setSchedules(filteredSchedules);
+        } else {
+          setSchedules([]);
         }
       } catch (error) {
-        console.error('Error fetching data:', error)
+        console.error("Error fetching data:", error);
+        setSchedules([]);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [id])
+    fetchData();
+  }, [id]);
 
   if (loading) {
-    return <Loader className="py-12" />
+    return <Loader className="py-12" />;
   }
 
   // if (!id) {
@@ -68,9 +88,9 @@ const TeacherAttendance = () => {
       <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
         Attendance Records
       </h2>
-      {/* <AttendanceList attendance={attendance} /> */}
+      <AttendanceList attendance={attendance} schedules={schedules} />
     </div>
-  )
-}
+  );
+};
 
-export default TeacherAttendance
+export default TeacherAttendance;
