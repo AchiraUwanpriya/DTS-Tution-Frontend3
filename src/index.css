@@ -89,6 +89,37 @@
     }
   }
 
+  /* Modern small scrollbar for specific scrollable containers */
+  .modern-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(79, 70, 229, 0.9) rgba(0, 0, 0, 0.06);
+  }
+
+  .modern-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .modern-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .modern-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(79, 70, 229, 0.85);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .modern-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(79, 70, 229, 1);
+  }
+
+  /* Dark mode tweak */
+  .dark .modern-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(99, 102, 241, 0.8);
+  }
+
   .animation-delay-100 {
     animation-delay: 100ms;
   }

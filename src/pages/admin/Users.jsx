@@ -41,6 +41,7 @@ import ClassPickerModal from "../../components/classes/ClassPickerModal";
 import Toast from "../../components/common/Toast";
 import { getAllClassSchedules } from "../../services/classScheduleService";
 import { getAllSubjects } from "../../services/subjectService";
+import { FiUsers, FiShield, FiUser, FiUserCheck } from "react-icons/fi";
 
 const normalizeIdString = (value) => {
   if (value === null || value === undefined) {
@@ -2208,27 +2209,54 @@ const AdminUsers = () => {
 
       {/* Tabs for filtering users by role */}
       <div className="bg-white dark:bg-gray-800 p-3 rounded-md shadow-sm">
-        <div className="flex gap-2 flex-wrap">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { key: "all", label: "All" },
-            { key: "admins", label: "Admins" },
-            { key: "teachers", label: "Teachers" },
-            { key: "students", label: "Students" },
+            { key: "all", label: "All", icon: FiUsers },
+            { key: "admins", label: "Admins", icon: FiShield },
+            { key: "teachers", label: "Teachers", icon: FiUserCheck },
+            { key: "students", label: "Students", icon: FiUser },
           ].map((tab) => {
+            const Icon = tab.icon;
             const count = getCountForTab(users, tab.key);
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-indigo-600 text-white"
-                    : "bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
                 title={`${tab.label} (${count})`}
+                className={`flex items-center gap-3 p-3 rounded-lg text-sm font-medium transition-all transform focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                  isActive
+                    ? "bg-indigo-600 text-white shadow"
+                    : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:shadow-md hover:-translate-y-0.5"
+                }`}
               >
-                {tab.label} <span className="ml-2 text-xs">{count}</span>
+                <span
+                  className={`inline-flex items-center justify-center w-8 h-8 rounded-full flex-shrink-0 ${
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : "bg-gray-100 text-indigo-600 dark:bg-gray-700 dark:text-indigo-300"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" aria-hidden="true" />
+                </span>
+                <span className="truncate">
+                  <span className="block leading-tight">{tab.label}</span>
+                </span>
+                <span
+                  className={`ml-auto text-xs font-medium ${
+                    isActive
+                      ? "text-white/90"
+                      : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  <span
+                    className={`inline-block px-2 py-0.5 rounded-full ${
+                      isActive ? "bg-white/20" : "bg-gray-100 dark:bg-gray-700"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </span>
               </button>
             );
           })}
@@ -2628,7 +2656,7 @@ const AdminUsers = () => {
           </motion.div>
         )}
       </AnimatePresence> */}
-            <AnimatePresence>
+      <AnimatePresence>
         {showModal && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -2695,7 +2723,6 @@ const AdminUsers = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
 
       {toastMessage ? (
         <Toast
