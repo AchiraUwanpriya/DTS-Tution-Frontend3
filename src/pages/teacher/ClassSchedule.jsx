@@ -202,7 +202,7 @@ const TeacherClassSchedule = () => {
         </div>
         <div className="flex flex-col">
           <label className="text-xs font-medium mb-1 text-gray-500 uppercase tracking-wide">
-            Subject
+            Class
           </label>
           <input
             name="subject"
