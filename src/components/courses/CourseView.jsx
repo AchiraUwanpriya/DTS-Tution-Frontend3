@@ -3458,7 +3458,7 @@ const CourseView = () => {
     return <Loader className="py-12" />;
   }
 
-  const isStudentUser = user?.userType === "student";
+  // const isStudentUser = user?.userType === "student";
 
   const subjects = Array.isArray(course.subjects)
     ? course.subjects
