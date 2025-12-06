@@ -981,29 +981,6 @@ const mapCourseToApiPayload = (courseData) => {
 export const getTeacherCourses = async (teacherId) => {
   const hasTeacherId = teacherId !== undefined && teacherId !== null;
 
-  if (hasTeacherId) {
-    try {
-      const response = await axios.get(`/Courses/teacher/${teacherId}`);
-      const raw = Array.isArray(response.data)
-        ? response.data
-        : response.data?.courses ||
-          response.data?.Courses ||
-          (response.data ? [response.data] : []);
-      const formattedCourses = raw.map(formatCourse).filter(Boolean);
-
-      // Filter out inactive courses for teacher visibility
-      const visible = formattedCourses.filter(courseIsActive);
-      if (visible.length) {
-        return visible;
-      }
-    } catch (error) {
-      console.warn(
-        "Teacher course endpoint unavailable, falling back to full course list",
-        error
-      );
-    }
-  }
-
   try {
     const response = await axios.get("/Courses");
     const courses = Array.isArray(response.data)
@@ -1885,15 +1862,4 @@ export const deleteCourse = async (courseId) => {
   }
 };
 
-// Real service functions (reference)
-/*
-export const getTeacherCourses = async (teacherId) => {
-  const response = await axios.get(`/Courses/teacher/${teacherId}`);
-  return response.data;
-};
-
-export const getCourseDetails = async (courseId) => {
-  const response = await axios.get(`/Courses/${courseId}`);
-  return response.data;
-};
-*/
+// Real service functions (reference) removed

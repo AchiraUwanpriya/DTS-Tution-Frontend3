@@ -9,7 +9,18 @@ import {
   getTeacherCourses,
   getTeacherCourseStudents,
 } from "../../services/courseService";
+import { getAllClassSchedules } from "../../services/classScheduleService";
 import Button from "../common/Button";
+
+const DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 const QRScanner = () => {
   const { id: routeCourseId, sessionId } = useParams();
@@ -53,6 +64,10 @@ const QRScanner = () => {
     }
   });
   const [sessionEndModified, setSessionEndModified] = useState(false);
+  const [schedules, setSchedules] = useState([]);
+  const [scheduleStatus, setScheduleStatus] = useState("idle");
+  const [scheduleError, setScheduleError] = useState("");
+  const [selectedScheduleId, setSelectedScheduleId] = useState("");
 
   // Keep session end time in sync with start time unless the end was manually edited
   const computeEndFromStart = (start) => {
@@ -123,6 +138,212 @@ const QRScanner = () => {
     };
     fetchCourses();
   }, [teacherId]);
+
+  const resolveCourseId = useCallback((course) => {
+    if (!course || typeof course !== "object") return null;
+    return (
+      course?.id ??
+      course?.Id ??
+      course?.courseId ??
+      course?.CourseId ??
+      course?.courseID ??
+      course?.CourseID ??
+      null
+    );
+  }, []);
+
+  const resolveScheduleCourseId = useCallback((schedule) => {
+    if (!schedule || typeof schedule !== "object") return null;
+    return (
+      schedule?.courseId ??
+      schedule?.CourseID ??
+      schedule?.courseID ??
+      schedule?.CourseId ??
+      schedule?.raw?.CourseID ??
+      schedule?.raw?.courseID ??
+      schedule?.raw?.CourseId ??
+      schedule?.raw?.courseId ??
+      null
+    );
+  }, []);
+
+  const makeScheduleValue = useCallback((schedule) => {
+    if (!schedule) return "";
+    const coreId =
+      schedule?.scheduleId ??
+      schedule?.id ??
+      schedule?.raw?.ScheduleID ??
+      schedule?.raw?.scheduleID ??
+      null;
+    if (coreId !== null && coreId !== undefined) {
+      return String(coreId);
+    }
+
+    const fallbackParts = [
+      schedule?.courseId ??
+        schedule?.CourseID ??
+        schedule?.courseID ??
+        "course",
+      schedule?.subjectId ??
+        schedule?.SubjectID ??
+        schedule?.subjectID ??
+        "subject",
+      schedule?.dayOfWeek ?? "day",
+      schedule?.startTime ?? "start",
+      schedule?.endTime ?? "end",
+    ];
+    return fallbackParts.map((part) => String(part ?? "")).join("|");
+  }, []);
+
+  useEffect(() => {
+    if (!teacherId) {
+      setSchedules([]);
+      setScheduleStatus("idle");
+      setScheduleError("");
+      setSelectedScheduleId("");
+      return;
+    }
+
+    const courseIdSet = new Set(
+      (Array.isArray(courses) ? courses : [])
+        .map((course) => {
+          const identifier = resolveCourseId(course);
+          return identifier === null || identifier === undefined
+            ? null
+            : String(identifier);
+        })
+        .filter(Boolean)
+    );
+
+    if (!courseIdSet.size) {
+      setSchedules([]);
+      setScheduleStatus("idle");
+      setScheduleError("");
+      setSelectedScheduleId("");
+      return;
+    }
+
+    let cancelled = false;
+    setScheduleStatus("loading");
+    setScheduleError("");
+
+    const loadSchedules = async () => {
+      try {
+        const list = await getAllClassSchedules();
+        if (cancelled) {
+          return;
+        }
+
+        const filtered = (Array.isArray(list) ? list : []).filter(
+          (schedule) => {
+            if (!schedule || typeof schedule !== "object") return false;
+            const courseIdCandidate = resolveScheduleCourseId(schedule);
+            if (courseIdCandidate === null || courseIdCandidate === undefined) {
+              return false;
+            }
+            return courseIdSet.has(String(courseIdCandidate));
+          }
+        );
+
+        filtered.sort((a, b) => {
+          const subjectA = String(a?.subjectName ?? "").toLowerCase();
+          const subjectB = String(b?.subjectName ?? "").toLowerCase();
+          if (subjectA && subjectB && subjectA !== subjectB) {
+            return subjectA.localeCompare(subjectB);
+          }
+          const courseA = String(a?.courseName ?? "").toLowerCase();
+          const courseB = String(b?.courseName ?? "").toLowerCase();
+          if (courseA && courseB && courseA !== courseB) {
+            return courseA.localeCompare(courseB);
+          }
+          const dayA = Number.isFinite(a?.dayOfWeek) ? a.dayOfWeek : 0;
+          const dayB = Number.isFinite(b?.dayOfWeek) ? b.dayOfWeek : 0;
+          if (dayA !== dayB) return dayA - dayB;
+          const startA = String(a?.startTime ?? "");
+          const startB = String(b?.startTime ?? "");
+          return startA.localeCompare(startB);
+        });
+
+        setSchedules(filtered);
+        setScheduleStatus("success");
+        setScheduleError("");
+        setSelectedScheduleId((prev) => {
+          if (!prev) return prev;
+          return filtered.some((item) => makeScheduleValue(item) === prev)
+            ? prev
+            : "";
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.error("Failed to load teacher schedules", error);
+        setSchedules([]);
+        setScheduleStatus("error");
+        setScheduleError(
+          "Unable to load schedules for your courses. Try again later."
+        );
+        setSelectedScheduleId("");
+      }
+    };
+
+    loadSchedules();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    teacherId,
+    courses,
+    makeScheduleValue,
+    resolveCourseId,
+    resolveScheduleCourseId,
+  ]);
+
+  const scheduleLookup = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(schedules) ? schedules : []).forEach((schedule) => {
+      map.set(makeScheduleValue(schedule), schedule);
+    });
+    return map;
+  }, [schedules, makeScheduleValue]);
+
+  const scheduleOptions = useMemo(() => {
+    const list = Array.isArray(schedules) ? schedules : [];
+    return list.map((schedule) => {
+      const value = makeScheduleValue(schedule);
+      const subjectLabel =
+        schedule?.subjectName ||
+        schedule?.SubjectName ||
+        schedule?.subjectId ||
+        schedule?.SubjectID ||
+        "Schedule";
+      const courseLabel = schedule?.courseName || schedule?.CourseName || "";
+      const dayLabel = Number.isFinite(schedule?.dayOfWeek)
+        ? DAY_NAMES[schedule.dayOfWeek]
+        : "";
+      const toShortTime = (time) => {
+        if (!time) return "";
+        return String(time).split(":").slice(0, 2).join(":");
+      };
+      const startShort = toShortTime(schedule?.startTime);
+      const endShort = toShortTime(schedule?.endTime);
+      const metaParts = [];
+      if (courseLabel) metaParts.push(courseLabel);
+      if (dayLabel) metaParts.push(dayLabel);
+      if (startShort && endShort) {
+        metaParts.push(`${startShort}-${endShort}`);
+      } else if (startShort) {
+        metaParts.push(`Start ${startShort}`);
+      } else if (endShort) {
+        metaParts.push(`End ${endShort}`);
+      }
+      const label = metaParts.length
+        ? `${subjectLabel} (${metaParts.join(" • ")})`
+        : String(subjectLabel);
+      return { value, label };
+    });
+  }, [schedules, makeScheduleValue]);
 
   useEffect(() => {
     if (!teacherId || !selectedCourseId) {
@@ -212,6 +433,73 @@ const QRScanner = () => {
   const rosterReady = rosterStatus === "success";
   const canScan =
     isTeacherAttendanceRoute && Boolean(selectedCourseId) && rosterReady;
+
+  const handleScheduleSelect = useCallback(
+    (value) => {
+      setSelectedScheduleId(value);
+      if (!value) {
+        setSessionEndModified(false);
+        return;
+      }
+
+      const schedule = scheduleLookup.get(value);
+      if (!schedule) {
+        return;
+      }
+
+      const resolvedCourseId = resolveScheduleCourseId(schedule);
+      if (resolvedCourseId !== null && resolvedCourseId !== undefined) {
+        const normalizedCourseId = String(resolvedCourseId);
+        setSelectedCourseId((prev) =>
+          prev === normalizedCourseId ? prev : normalizedCourseId
+        );
+      }
+
+      const normalizeTimeInput = (time) => {
+        if (!time) return "";
+        return String(time).split(":").slice(0, 2).join(":");
+      };
+
+      const startValue = normalizeTimeInput(schedule?.startTime);
+      if (startValue) {
+        setSessionStartTime((prev) =>
+          prev === startValue ? prev : startValue
+        );
+      }
+
+      const endValue = normalizeTimeInput(schedule?.endTime);
+      if (endValue) {
+        setSessionEndModified(true);
+        setSessionEndTime((prev) => (prev === endValue ? prev : endValue));
+      } else {
+        setSessionEndModified(false);
+      }
+    },
+    [scheduleLookup, resolveScheduleCourseId]
+  );
+
+  useEffect(() => {
+    if (!selectedScheduleId) return;
+    const schedule = scheduleLookup.get(selectedScheduleId);
+    if (!schedule) {
+      setSelectedScheduleId("");
+      return;
+    }
+    const scheduleCourseId = resolveScheduleCourseId(schedule);
+    if (
+      selectedCourseId &&
+      scheduleCourseId !== null &&
+      scheduleCourseId !== undefined &&
+      String(scheduleCourseId) !== String(selectedCourseId)
+    ) {
+      setSelectedScheduleId("");
+    }
+  }, [
+    selectedScheduleId,
+    selectedCourseId,
+    scheduleLookup,
+    resolveScheduleCourseId,
+  ]);
 
   const resolveAttendanceDate = useCallback(() => {
     if (selectedDate) {
@@ -480,8 +768,8 @@ const QRScanner = () => {
 
       if (!resolvedCourseId) {
         setStatus("error");
-        setMessage("Select a course before scanning student QR codes.");
-        setScanError("Course selection is required to record attendance.");
+        setMessage("Select a schedule before scanning student QR codes.");
+        setScanError("Schedule selection is required to record attendance.");
         return;
       }
 
@@ -831,88 +1119,47 @@ const QRScanner = () => {
       </h2>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-        {/* Select Course (replaces subject) */}
-        <div className="relative">
-          <select
-            value={selectedCourseId}
-            onChange={(e) => setSelectedCourseId(e.target.value)}
-            className="w-full text-sm sm:text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="">Select Course</option>
-            {courses.map((c) => (
-              <option
-                key={c.id ?? c.CourseID}
-                value={String(c.id ?? c.CourseID)}
-              >
-                {c.name ?? c.CourseName ?? c.code}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Date Picker */}
-        <div className="relative">
-            
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-full text-sm sm:text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            aria-label="Session date"
-          />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-            📅
-          </span>
-        </div>
-
-        {/* Session Start Time */}
+      <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 mb-6">
+        {/* Schedule picker */}
         <div>
           <label
-            htmlFor="session-start-time"
-            className="block text-sm  font-medium text-gray-700 dark:text-gray-300 mb-1"
-          >
-            Session start
-          </label>
-          <div className="relative">
-            <input
-              id="session-start-time"
-              type="time"
-              value={sessionStartTime}
-              onChange={(e) => setSessionStartTime(e.target.value)}
-              className="w-full text-sm sm:text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              aria-label="Session start time"
-            />
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-              🕒
-            </span>
-          </div>
-        </div>
-
-        {/* Session End Time */}
-        <div>
-          <label
-            htmlFor="session-end-time"
+            htmlFor="schedule-select"
             className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
           >
-            Session end
+            Schedule
           </label>
           <div className="relative">
-            <input
-              id="session-end-time"
-              type="time"
-              value={sessionEndTime}
-              onChange={(e) => {
-                setSessionEndTime(e.target.value);
-                setSessionEndModified(true);
-              }}
-              className="w-full rounded-lg border text-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              aria-label="Session end time"
-            />
+            <select
+              id="schedule-select"
+              value={selectedScheduleId}
+              onChange={(e) => handleScheduleSelect(e.target.value)}
+              disabled={scheduleStatus === "loading"}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Select Schedule</option>
+              {scheduleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-              🕓
+              🗓️
             </span>
           </div>
+          {scheduleStatus === "loading" && (
+            <p className="mt-1 text-xs text-gray-500">
+              Loading schedules for your courses...
+            </p>
+          )}
+          {scheduleStatus === "error" && (
+            <p className="mt-1 text-xs text-red-500">{scheduleError}</p>
+          )}
+          {scheduleStatus === "success" && !scheduleOptions.length && (
+            <p className="mt-1 text-xs text-gray-500">
+              No schedules found for your courses.
+            </p>
+          )}
         </div>
       </div>
 
@@ -938,17 +1185,17 @@ const QRScanner = () => {
           {actionButtonLabel}
         </Button>
         <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
-          {selectedCourseId === "" && (
+          {selectedScheduleId === "" && (
             <span className="text-sm text-gray-500">
-              Select a course to enable scanning
+              Select a schedule to enable scanning
             </span>
           )}
-          {selectedCourseId !== "" && rosterStatus === "loading" && (
+          {selectedScheduleId !== "" && rosterStatus === "loading" && (
             <span className="text-sm text-gray-500">
               Loading enrolled students...
             </span>
           )}
-          {selectedCourseId !== "" && rosterStatus === "error" && (
+          {selectedScheduleId !== "" && rosterStatus === "error" && (
             <span className="text-sm text-red-500">{rosterError}</span>
           )}
         </div>

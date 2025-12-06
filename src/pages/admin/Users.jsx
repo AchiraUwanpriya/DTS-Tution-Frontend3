@@ -1,80 +1,3 @@
-// import { useState, useEffect } from 'react'
-// import { useParams, Link } from 'react-router-dom'
-// import { getAllUsers, getUserDetails } from '../../services/userService'
-// import UserList from '../../components/users/UserList'
-// import UserForm from '../../components/users/UserForm'
-// import Modal from '../../components/common/Modal'
-// import Button from '../../components/common/Button'
-// import Loader from '../../components/common/Loader'
-
-// const AdminUsers = () => {
-//   const [users, setUsers] = useState([])
-//   const [loading, setLoading] = useState(true)
-//   const [showModal, setShowModal] = useState(false)
-//   const [selectedUser, setSelectedUser] = useState(null)
-
-//   useEffect(() => {
-//     const fetchUsers = async () => {
-//       try {
-//         const data = await getAllUsers()
-//         setUsers(data)
-//       } catch (error) {
-//         console.error('Error fetching users:', error)
-//       } finally {
-//         setLoading(false)
-//       }
-//     }
-
-//     fetchUsers()
-//   }, [])
-
-//   const handleUserSubmit = (userData) => {
-//     if (selectedUser) {
-//       setUsers(
-//         users.map((user) =>
-//           user.id === selectedUser.id ? { ...user, ...userData } : user
-//         )
-//       )
-//     } else {
-//       setUsers([...users, { id: users.length + 1, ...userData }])
-//     }
-//     setShowModal(false)
-//     setSelectedUser(null)
-//   }
-
-//   const handleEditUser = async (userId) => {
-//     try {
-//       const user = await getUserDetails(userId)
-//       setSelectedUser(user)
-//       setShowModal(true)
-//     } catch (error) {
-//       console.error('Error fetching user details:', error)
-//     }
-//   }
-
-//   if (loading) {
-//     return <Loader className="py-12" />
-//   }
-
-//   return (
-//     <div className="space-y-6">
-//       <div className="flex justify-between items-center">
-//         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-//           Users
-//         </h1>
-//         <Button variant="primary" onClick={() => setShowModal(true)}>
-//           Add User
-//         </Button>
-//       </div>
-
-//       <UserList users={users} onEdit={handleEditUser} />
-
-//     </div>
-//   )
-// }
-
-// export default AdminUsers
-
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import {
@@ -93,6 +16,10 @@ import {
 import {
   createEnrollmentsForStudent,
   createEnrollment,
+  getEnrollmentsByStudent,
+  deleteEnrollment,
+  updateEnrollment,
+  setEnrollmentActiveStatus,
 } from "../../services/enrollmentService";
 import {
   createTeacher,
@@ -105,11 +32,6 @@ import {
   getStudentCourses,
   getCourseDetails,
 } from "../../services/courseService";
-import {
-  getEnrollmentsByStudent,
-  deleteEnrollment,
-} from "../../services/enrollmentService";
-import { setEnrollmentActiveStatus } from "../../services/enrollmentService";
 import UserList from "../../components/users/UserList";
 import UserForm from "../../components/users/UserForm";
 import { motion, AnimatePresence } from "framer-motion";
@@ -140,6 +62,15 @@ const normalizeIdString = (value) => {
   return str;
 };
 
+const toApiId = (value) => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  const numeric = Number(value);
+  return Number.isNaN(numeric) ? value : numeric;
+};
+
 const dayNames = [
   "Monday",
   "Tuesday",
@@ -148,6 +79,13 @@ const dayNames = [
   "Friday",
   "Saturday",
   "Sunday",
+];
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "nameAsc", label: "Name A-Z" },
+  { value: "nameDesc", label: "Name Z-A" },
 ];
 
 const formatScheduleSummary = (schedule) => {
@@ -472,11 +410,12 @@ const deriveClassOptions = (
       });
     }
 
-    if (
-      normalizedCourseId &&
-      courseIdCandidates.size &&
-      !courseIdCandidates.has(normalizedCourseId)
-    ) {
+    const hasExplicitMatch = normalizedCourseId
+      ? courseIdCandidates.has(normalizedCourseId)
+      : false;
+    const hasScheduleMatch = subjectScheduleMap.has(normalizedSubjectId);
+
+    if (normalizedCourseId && !hasExplicitMatch && !hasScheduleMatch) {
       return;
     }
 
@@ -532,6 +471,7 @@ const AdminUsers = () => {
   const [toastType, setToastType] = useState("success");
   // view for members list: 'active' or 'inactive'
   const [membersTab, setMembersTab] = useState("active");
+  const [sortOption, setSortOption] = useState("newest");
   const [coursePickerSaving, setCoursePickerSaving] = useState(false);
   const [coursePickerError, setCoursePickerError] = useState("");
   const [pendingCourseSelection, setPendingCourseSelection] = useState([]);
@@ -541,10 +481,19 @@ const AdminUsers = () => {
   const [classPickerLoading, setClassPickerLoading] = useState(false);
   const [classPickerError, setClassPickerError] = useState("");
   const [classPickerCourseName, setClassPickerCourseName] = useState("");
+  const [classPickerContext, setClassPickerContext] = useState(null);
+  const [studentCourseClassSelections, setStudentCourseClassSelections] =
+    useState({});
   const [creationSaving, setCreationSaving] = useState(false);
   const subjectsCacheRef = useRef(null);
   const classSchedulesCacheRef = useRef(null);
   const classOptionsCacheRef = useRef(new Map());
+  const pendingClassSelectionResolverRef = useRef(null);
+  const studentCourseClassSelectionsRef = useRef({});
+
+  useEffect(() => {
+    studentCourseClassSelectionsRef.current = studentCourseClassSelections;
+  }, [studentCourseClassSelections]);
 
   // derived course filter (if admin navigated here with a course param)
   const courseFilterParam = (() => {
@@ -568,6 +517,9 @@ const AdminUsers = () => {
     setClassPickerCourseName("");
     setShowClassPicker(false);
     setCreationSaving(false);
+    setClassPickerContext(null);
+    setStudentCourseClassSelections({});
+    pendingClassSelectionResolverRef.current = null;
   };
 
   const ensureSubjectsLoaded = async () => {
@@ -685,14 +637,6 @@ const AdminUsers = () => {
           .filter(Boolean)
       )
     );
-
-    const toApiId = (value) => {
-      if (value === null || value === undefined) {
-        return value;
-      }
-      const numeric = Number(value);
-      return Number.isNaN(numeric) ? value : numeric;
-    };
 
     const photoToUpload =
       pendingUserData.ProfilePicture || pendingUserData.profilepicture || null;
@@ -930,6 +874,22 @@ const AdminUsers = () => {
   };
 
   const handleClassPickerClose = () => {
+    if (classPickerContext?.mode === "edit-student-course") {
+      const resolver = pendingClassSelectionResolverRef.current;
+      pendingClassSelectionResolverRef.current = null;
+      setShowClassPicker(false);
+      setClassPickerContext(null);
+      setClassPickerError("");
+      setClassPickerLoading(false);
+      setClassSelection([]);
+      setClassPickerCourseName("");
+      setClassOptions([]);
+      if (resolver && typeof resolver.resolve === "function") {
+        resolver.resolve(null);
+      }
+      return;
+    }
+
     if (creationSaving) {
       return;
     }
@@ -944,9 +904,172 @@ const AdminUsers = () => {
       setCoursePickerError("");
       setShowCoursePicker(true);
     }
+    setClassPickerContext(null);
+  };
+
+  const handleStudentCourseSelectionChange = async (
+    nextIdsRaw = [],
+    previousIdsRaw = []
+  ) => {
+    const dedupeIds = (list) =>
+      Array.from(
+        new Set(
+          (list || [])
+            .map((value) => normalizeIdString(value))
+            .filter((value) => value !== null)
+        )
+      );
+
+    const nextIds = dedupeIds(nextIdsRaw);
+    const previousIds = dedupeIds(previousIdsRaw);
+
+    const previousSet = new Set(previousIds);
+    const nextSet = new Set(nextIds);
+
+    const removed = previousIds.filter((id) => !nextSet.has(id));
+    if (removed.length) {
+      setStudentCourseClassSelections((prev) => {
+        const next = { ...prev };
+        removed.forEach((courseId) => {
+          const key = normalizeIdString(courseId);
+          if (key && Object.prototype.hasOwnProperty.call(next, key)) {
+            delete next[key];
+          }
+        });
+        return next;
+      });
+    }
+
+    const added = nextIds.filter((id) => !previousSet.has(id));
+    if (!added.length) {
+      return {
+        accepted: true,
+        finalIds: nextIds,
+      };
+    }
+
+    let workingMap = { ...studentCourseClassSelectionsRef.current };
+
+    for (const courseIdCandidate of added) {
+      const courseId = normalizeIdString(courseIdCandidate);
+      if (!courseId) {
+        continue;
+      }
+
+      setClassPickerLoading(true);
+      setClassPickerError("");
+
+      let payload;
+      try {
+        payload = await loadClassOptionsForCourse(courseId);
+      } catch (error) {
+        console.error("Failed to load classes for course", error);
+        setClassPickerLoading(false);
+        setFormError(
+          error?.message ||
+            "Unable to load classes for the selected course. Please try again."
+        );
+        return {
+          accepted: false,
+          finalIds: previousIds,
+          reopenPicker: true,
+        };
+      }
+
+      const options = Array.isArray(payload?.options) ? payload.options : [];
+      const courseName = payload?.courseName || "";
+
+      setClassPickerLoading(false);
+
+      if (!options.length) {
+        const nextMap = { ...workingMap };
+        if (Object.prototype.hasOwnProperty.call(nextMap, courseId)) {
+          delete nextMap[courseId];
+        }
+        workingMap = nextMap;
+        continue;
+      }
+
+      const existingSelection = workingMap[courseId]
+        ? [String(workingMap[courseId].subjectId)]
+        : [];
+
+      const selection = await new Promise((resolve) => {
+        pendingClassSelectionResolverRef.current = { resolve };
+        setClassOptions(options);
+        setClassSelection(
+          existingSelection.length
+            ? existingSelection
+            : options.length === 1
+            ? [String(options[0].id)]
+            : []
+        );
+        setClassPickerCourseName(courseName);
+        setClassPickerError("");
+        setClassPickerContext({
+          mode: "edit-student-course",
+          courseId,
+        });
+        setShowClassPicker(true);
+      });
+
+      if (!selection || !selection.length) {
+        return {
+          accepted: false,
+          finalIds: previousIds,
+          reopenPicker: true,
+        };
+      }
+
+      const selectedId = String(selection[0]);
+      const normalizedSelectedId = normalizeIdString(selectedId);
+
+      const optionMatch = options.find((option) => {
+        const optionId = normalizeIdString(option?.id ?? option?.subjectId);
+        return optionId && optionId === normalizedSelectedId;
+      });
+
+      workingMap = {
+        ...workingMap,
+        [courseId]: {
+          subjectId: normalizedSelectedId,
+          courseSubjectId: normalizeIdString(
+            optionMatch?.courseSubjectId ?? optionMatch?.CourseSubjectID
+          ),
+        },
+      };
+    }
+
+    setStudentCourseClassSelections(workingMap);
+    setClassPickerLoading(false);
+
+    return {
+      accepted: true,
+      finalIds: nextIds,
+    };
   };
 
   const handleClassPickerProceed = async (selectedSubjectIds) => {
+    if (classPickerContext?.mode === "edit-student-course") {
+      const normalized = Array.from(
+        new Set((selectedSubjectIds || []).map((value) => String(value)))
+      ).filter(Boolean);
+
+      setClassSelection(normalized);
+      setClassPickerError("");
+      setClassPickerLoading(false);
+      setShowClassPicker(false);
+
+      const resolver = pendingClassSelectionResolverRef.current;
+      pendingClassSelectionResolverRef.current = null;
+      setClassPickerContext(null);
+
+      if (resolver && typeof resolver.resolve === "function") {
+        resolver.resolve(normalized);
+      }
+      return;
+    }
+
     const normalized = Array.from(
       new Set((selectedSubjectIds || []).map((value) => String(value)))
     ).filter(Boolean);
@@ -1242,7 +1365,9 @@ const AdminUsers = () => {
               setNewTeacherIdForAssignment(String(teacherId));
               setShowAssignTeacherCourses(true);
               try {
-                const fullName = `${merged.FirstName || merged.firstName || ""} ${merged.LastName || merged.lastName || ""}`.trim();
+                const fullName = `${
+                  merged.FirstName || merged.firstName || ""
+                } ${merged.LastName || merged.lastName || ""}`.trim();
                 const persisted = { id: String(teacherId), name: fullName };
                 window.localStorage.setItem(
                   "selected_teacher_for_course",
@@ -1352,14 +1477,81 @@ const AdminUsers = () => {
           try {
             if (nextTypeId === "3") {
               // Student: load student record and enrolled courses
-              const [studentRec, courses] = await Promise.all([
+              const [studentRec, courses, enrollments] = await Promise.all([
                 getStudentById(userId),
                 getStudentCourses(userId),
+                getEnrollmentsByStudent(userId),
               ]);
               const studentFields = studentRec || {};
               const courseIds = (courses || [])
                 .map((c) => c.id ?? c.CourseID ?? c.courseId)
                 .filter((v) => v !== undefined && v !== null);
+
+              const initialSelections = {};
+              (enrollments || []).forEach((enrollment) => {
+                if (!enrollment || typeof enrollment !== "object") {
+                  return;
+                }
+
+                const courseKey = normalizeIdString(
+                  enrollment.CourseID ??
+                    enrollment.courseID ??
+                    enrollment.raw?.CourseID ??
+                    enrollment.raw?.courseID
+                );
+                if (!courseKey) {
+                  return;
+                }
+
+                const subjectCandidates = [
+                  enrollment.SubjectID,
+                  enrollment.subjectID,
+                  enrollment.subjectId,
+                  enrollment.raw?.SubjectID,
+                  enrollment.raw?.subjectID,
+                  enrollment.raw?.SubjectId,
+                  enrollment.raw?.subjectId,
+                ];
+
+                let subjectId = null;
+                for (const candidate of subjectCandidates) {
+                  const normalized = normalizeIdString(candidate);
+                  if (normalized) {
+                    subjectId = normalized;
+                    break;
+                  }
+                }
+
+                if (!subjectId) {
+                  return;
+                }
+
+                const courseSubjectCandidates = [
+                  enrollment.CourseSubjectID,
+                  enrollment.courseSubjectID,
+                  enrollment.courseSubjectId,
+                  enrollment.raw?.CourseSubjectID,
+                  enrollment.raw?.courseSubjectID,
+                  enrollment.raw?.CourseSubjectId,
+                  enrollment.raw?.courseSubjectId,
+                ];
+
+                let courseSubjectId = null;
+                for (const candidate of courseSubjectCandidates) {
+                  const normalized = normalizeIdString(candidate);
+                  if (normalized) {
+                    courseSubjectId = normalized;
+                    break;
+                  }
+                }
+
+                initialSelections[courseKey] = {
+                  subjectId,
+                  courseSubjectId,
+                };
+              });
+
+              setStudentCourseClassSelections(initialSelections);
               merged = {
                 ...merged,
                 RollNumber:
@@ -1449,30 +1641,242 @@ const AdminUsers = () => {
               ParentContact: userData.ParentContact ?? userData.GuardianPhone,
             });
             const desired = (userData.StudentCourseIDs || [])
-              .map((v) => Number(v))
-              .filter((n) => !isNaN(n));
+              .map((value) => normalizeIdString(value))
+              .filter((value) => value !== null);
             try {
-              const current = await getEnrollmentsByStudent(userId);
-              const currentCourseIds = current
-                .map((e) => Number(e.CourseID))
-                .filter((n) => !isNaN(n));
-              const toAdd = desired.filter(
-                (cid) => !currentCourseIds.includes(cid)
-              );
-              const toRemove = current.filter(
-                (e) => !desired.includes(Number(e.CourseID))
+              const enrollmentList = await getEnrollmentsByStudent(userId);
+              const selectionMap =
+                studentCourseClassSelectionsRef.current || {};
+
+              const currentEnrollments = (enrollmentList || []).map(
+                (enrollment) => {
+                  const courseId = normalizeIdString(
+                    enrollment.CourseID ??
+                      enrollment.courseID ??
+                      enrollment.raw?.CourseID ??
+                      enrollment.raw?.courseID
+                  );
+
+                  const enrollmentId =
+                    enrollment.EnrollmentID ??
+                    enrollment.enrollmentID ??
+                    enrollment.id ??
+                    enrollment.Id ??
+                    enrollment.raw?.EnrollmentID ??
+                    enrollment.raw?.enrollmentID ??
+                    null;
+
+                  return {
+                    enrollment,
+                    courseId,
+                    enrollmentId,
+                  };
+                }
               );
 
-              if (toAdd.length) {
-                await createEnrollmentsForStudent(userId, toAdd, {
-                  EnrollmentDate: userData.EnrollmentDate,
-                  IsActive: true,
+              const currentEnrollmentMap = new Map();
+              const duplicateEnrollments = [];
+              currentEnrollments.forEach((entry) => {
+                if (!entry.courseId) {
+                  if (entry.enrollmentId != null) {
+                    duplicateEnrollments.push(entry);
+                  }
+                  return;
+                }
+
+                if (currentEnrollmentMap.has(entry.courseId)) {
+                  if (entry.enrollmentId != null) {
+                    duplicateEnrollments.push(entry);
+                  }
+                  return;
+                }
+
+                currentEnrollmentMap.set(entry.courseId, entry);
+              });
+
+              const desiredSet = new Set(desired);
+
+              const toCreate = [];
+              const toUpdate = [];
+
+              desiredSet.forEach((courseId) => {
+                if (!courseId) {
+                  return;
+                }
+
+                const existing = currentEnrollmentMap.get(courseId);
+                if (existing) {
+                  toUpdate.push(existing);
+                } else {
+                  toCreate.push(courseId);
+                }
+              });
+
+              const toRemove = (() => {
+                const flagged = new Map();
+
+                duplicateEnrollments.forEach((entry) => {
+                  if (entry.enrollmentId != null) {
+                    flagged.set(entry.enrollmentId, entry);
+                  }
                 });
+
+                currentEnrollments.forEach((entry) => {
+                  if (
+                    entry.courseId &&
+                    !desiredSet.has(entry.courseId) &&
+                    entry.enrollmentId != null
+                  ) {
+                    flagged.set(entry.enrollmentId, entry);
+                  }
+                });
+
+                return Array.from(flagged.values());
+              })();
+
+              if (toUpdate.length) {
+                const updateResults = await Promise.allSettled(
+                  toUpdate.map((entry) => {
+                    if (!entry.enrollmentId) {
+                      return Promise.resolve(null);
+                    }
+
+                    const selection = selectionMap[entry.courseId] || {};
+
+                    const subjectCandidates = [
+                      selection.subjectId,
+                      entry.enrollment.SubjectID,
+                      entry.enrollment.subjectID,
+                      entry.enrollment.raw?.SubjectID,
+                      entry.enrollment.raw?.subjectID,
+                    ].map((candidate) => normalizeIdString(candidate));
+
+                    const courseSubjectCandidates = [
+                      selection.courseSubjectId,
+                      entry.enrollment.CourseSubjectID,
+                      entry.enrollment.courseSubjectID,
+                      entry.enrollment.raw?.CourseSubjectID,
+                      entry.enrollment.raw?.courseSubjectID,
+                    ].map((candidate) => normalizeIdString(candidate));
+
+                    const resolvedSubjectId = subjectCandidates.find(Boolean);
+                    const resolvedCourseSubjectId =
+                      courseSubjectCandidates.find(Boolean);
+
+                    const enrollmentDateValue =
+                      userData.EnrollmentDate ||
+                      entry.enrollment.EnrollmentDate ||
+                      entry.enrollment.raw?.EnrollmentDate ||
+                      entry.enrollment.raw?.enrollmentDate ||
+                      new Date().toISOString();
+
+                    const payload = {
+                      EnrollmentID: toApiId(entry.enrollmentId),
+                      StudentID: toApiId(userId),
+                      CourseID: toApiId(entry.courseId),
+                      EnrollmentDate: enrollmentDateValue,
+                      IsActive:
+                        entry.enrollment.IsActive ??
+                        entry.enrollment.isActive ??
+                        true,
+                    };
+
+                    if (resolvedSubjectId) {
+                      payload.SubjectID = toApiId(resolvedSubjectId);
+                    }
+
+                    if (resolvedCourseSubjectId) {
+                      payload.CourseSubjectID = toApiId(
+                        resolvedCourseSubjectId
+                      );
+                    }
+
+                    return updateEnrollment(entry.enrollmentId, payload);
+                  })
+                );
+
+                const failedUpdate = updateResults.find(
+                  (result) => result.status === "rejected"
+                );
+
+                if (failedUpdate) {
+                  const reason = failedUpdate.reason;
+                  throw new Error(
+                    reason?.message ||
+                      "Failed to update existing course enrollment."
+                  );
+                }
               }
 
-              for (const e of toRemove) {
-                if (e.EnrollmentID != null) {
-                  await deleteEnrollment(e.EnrollmentID);
+              if (toCreate.length) {
+                const withClass = [];
+                const withoutClass = [];
+
+                toCreate.forEach((courseId) => {
+                  const selection = selectionMap[courseId];
+                  if (selection && selection.subjectId) {
+                    withClass.push({ courseId, selection });
+                  } else {
+                    withoutClass.push(courseId);
+                  }
+                });
+
+                const defaultEnrollmentDate =
+                  userData.EnrollmentDate || new Date().toISOString();
+
+                if (withClass.length) {
+                  const creationResults = await Promise.allSettled(
+                    withClass.map(({ courseId, selection }) => {
+                      const payload = {
+                        StudentID: toApiId(userId),
+                        CourseID: toApiId(courseId),
+                        SubjectID: toApiId(selection.subjectId),
+                        EnrollmentDate: defaultEnrollmentDate,
+                        IsActive: true,
+                      };
+
+                      if (selection.courseSubjectId) {
+                        payload.CourseSubjectID = toApiId(
+                          selection.courseSubjectId
+                        );
+                      }
+
+                      return createEnrollment(payload);
+                    })
+                  );
+
+                  const failures = creationResults.filter(
+                    (result) => result.status === "rejected"
+                  );
+
+                  if (failures.length) {
+                    const reason = failures[0]?.reason;
+                    throw new Error(
+                      reason?.message ||
+                        "Failed to enroll the student in the selected class."
+                    );
+                  }
+                }
+
+                if (withoutClass.length) {
+                  if (withoutClass.length) {
+                    await Promise.all(
+                      withoutClass.map((courseId) =>
+                        createEnrollment({
+                          StudentID: toApiId(userId),
+                          CourseID: toApiId(courseId),
+                          EnrollmentDate: defaultEnrollmentDate,
+                          IsActive: true,
+                        })
+                      )
+                    );
+                  }
+                }
+              }
+
+              for (const { enrollmentId } of toRemove) {
+                if (enrollmentId != null) {
+                  await deleteEnrollment(enrollmentId);
                 }
               }
             } catch (enSyncErr) {
@@ -1531,11 +1935,13 @@ const AdminUsers = () => {
         setSelectedUser(null);
         setForceUserType(null);
         setEditStep(1);
+        setStudentCourseClassSelections({});
       }
 
       setShowModal(false);
       setSelectedUser(null);
       setForceUserType(null);
+      setStudentCourseClassSelections({});
     } catch (error) {
       console.error("Error saving user:", error);
       setFormError(error.message || "Failed to save user");
@@ -1770,6 +2176,17 @@ const AdminUsers = () => {
     );
   }
 
+  const isEditingStudentFlow =
+    Boolean(selectedUser) &&
+    String(
+      forceUserType ??
+        selectedUser.UserTypeID ??
+        selectedUser.userTypeID ??
+        selectedUser.UserType ??
+        selectedUser.userType ??
+        ""
+    ) === "3";
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -1832,34 +2249,73 @@ const AdminUsers = () => {
               })
             : filtered;
 
+        const sortedUsers = sortUsers(displayUsers, sortOption);
+
+        const addButton = (() => {
+          if (activeTab === "admins") {
+            return (
+              <button
+                onClick={() => openCreateFor(1)}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                + Add Admin
+              </button>
+            );
+          }
+
+          if (activeTab === "teachers") {
+            return (
+              <button
+                onClick={() => openCreateFor(2)}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                + Add Teacher
+              </button>
+            );
+          }
+
+          if (activeTab === "students") {
+            return (
+              <button
+                onClick={() => openCreateFor(3)}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                + Add Student
+              </button>
+            );
+          }
+
+          return null;
+        })();
+
         return (
           <>
-            <div className="flex justify-end mb-3">
-              {activeTab === "admins" && (
-                <button
-                  onClick={() => openCreateFor(1)}
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <label
+                  htmlFor="user-sort"
+                  className="text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
-                  + Add Admin
-                </button>
-              )}
+                  Sort by
+                </label>
+                <select
+                  id="user-sort"
+                  value={sortOption}
+                  onChange={(event) => setSortOption(event.target.value)}
+                  className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              {activeTab === "teachers" && (
-                <button
-                  onClick={() => openCreateFor(2)}
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                >
-                  + Add Teacher
-                </button>
-              )}
-
-              {activeTab === "students" && (
-                <button
-                  onClick={() => openCreateFor(3)}
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                >
-                  + Add Student
-                </button>
+              {addButton && (
+                <div className="flex justify-start sm:justify-end w-full sm:w-auto">
+                  {addButton}
+                </div>
               )}
             </div>
 
@@ -1868,8 +2324,8 @@ const AdminUsers = () => {
               const isActiveFlag = (u) =>
                 Boolean(u?.IsActive ?? u?.isActive ?? true);
 
-              const activeUsers = (displayUsers || []).filter(isActiveFlag);
-              const inactiveUsers = (displayUsers || []).filter(
+              const activeUsers = (sortedUsers || []).filter(isActiveFlag);
+              const inactiveUsers = (sortedUsers || []).filter(
                 (u) => !isActiveFlag(u)
               );
 
@@ -1984,6 +2440,11 @@ const AdminUsers = () => {
                     options.length === 1 ? [String(options[0].id)] : []
                   );
                   setClassPickerCourseName(courseName || "");
+                  setClassPickerContext({
+                    mode: "create-student",
+                    courseId: primaryCourseId,
+                    multiSelect: false,
+                  });
                   setShowCoursePicker(false);
                   setShowClassPicker(true);
                 } catch (err) {
@@ -2013,13 +2474,25 @@ const AdminUsers = () => {
                   ? `Choose the class or section for ${classPickerCourseName}.`
                   : "Choose the class for the student."
               }
-              saving={creationSaving}
+              saving={
+                classPickerContext?.mode === "create-student"
+                  ? creationSaving
+                  : false
+              }
               loading={classPickerLoading}
               errorMessage={classPickerError}
-              multiSelect={false}
+              multiSelect={Boolean(classPickerContext?.multiSelect) || false}
               requireSelection={classOptions.length > 0}
-              proceedLabel="Create Student"
-              cancelLabel="Back"
+              proceedLabel={
+                classPickerContext?.mode === "edit-student-course"
+                  ? "Save Selection"
+                  : "Create Student"
+              }
+              cancelLabel={
+                classPickerContext?.mode === "edit-student-course"
+                  ? "Cancel"
+                  : "Back"
+              }
               onProceed={handleClassPickerProceed}
             />
             {/* Post-create teacher course assignment modal */}
@@ -2046,33 +2519,33 @@ const AdminUsers = () => {
                   isNaN(Number(id)) ? id : Number(id)
                 );
                 const teacherId = newTeacherIdForAssignment;
-                if (teacherId && ids.length) {
-                  try {
-                    for (const cid of ids) {
-                      await updateCourse(cid, { TeacherID: teacherId });
-                    }
-                    // Refresh users list to reflect assignments
-                    try {
-                      const all = await getAllUsers();
-                      setUsers(all);
-                    } catch (_) {
-                      // non-fatal
-                    }
-                    setToastMessage("Assigned courses to the new teacher.");
-                    setToastType("success");
-                  } catch (assignErr) {
-                    console.error(
-                      "Failed to assign selected courses to teacher",
-                      assignErr
-                    );
-                    setFormError(
-                      assignErr?.message ||
-                        "Teacher created, but failed to assign selected courses"
-                    );
-                    setToastMessage("Failed to assign selected courses.");
-                    setToastType("error");
-                  }
-                }
+                // if (teacherId && ids.length) {
+                //   try {
+                //     for (const cid of ids) {
+                //       await updateCourse(cid, { TeacherID: teacherId });
+                //     }
+                //     // Refresh users list to reflect assignments
+                //     try {
+                //       const all = await getAllUsers();
+                //       setUsers(all);
+                //     } catch (_) {
+                //       // non-fatal
+                //     }
+                //     setToastMessage("Assigned courses to the new teacher.");
+                //     setToastType("success");
+                //   } catch (assignErr) {
+                //     console.error(
+                //       "Failed to assign selected courses to teacher",
+                //       assignErr
+                //     );
+                //     setFormError(
+                //       assignErr?.message ||
+                //         "Teacher created, but failed to assign selected courses"
+                //     );
+                //     setToastMessage("Failed to assign selected courses.");
+                //     setToastType("error");
+                //   }
+                // }
                 setShowAssignTeacherCourses(false);
                 setNewTeacherIdForAssignment(null);
               }}
@@ -2130,6 +2603,11 @@ const AdminUsers = () => {
                   }
                   showRoleFields={
                     Boolean(selectedUser) ? editStep === 2 : createStep === 2
+                  }
+                  onStudentCourseSelectionChange={
+                    isEditingStudentFlow
+                      ? handleStudentCourseSelectionChange
+                      : undefined
                   }
                   submitLabel={
                     selectedUser
@@ -2236,6 +2714,187 @@ const ToastWrapper = ({ message, type, onClose }) => {
   return (
     <Toast message={message} type={type} duration={3000} onClose={onClose} />
   );
+};
+
+const getUserFullName = (user) => {
+  if (!user || typeof user !== "object") {
+    return "";
+  }
+
+  const first = ((user.FirstName ?? user.firstName) || "").toString().trim();
+  const last = ((user.LastName ?? user.lastName) || "").toString().trim();
+  const full = `${first} ${last}`.trim();
+  if (full) {
+    return full;
+  }
+
+  const username = ((user.Username ?? user.username) || "").toString().trim();
+  if (username) {
+    return username;
+  }
+
+  return ((user.Email ?? user.email) || "").toString().trim();
+};
+
+const parseTimestamp = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalizeNumeric = (num) => {
+    if (!Number.isFinite(num)) {
+      return null;
+    }
+    if (num > 1e12) {
+      return num;
+    }
+    if (num > 1e9) {
+      return num * 1000;
+    }
+    return null;
+  };
+
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+
+  if (typeof value === "number") {
+    return normalizeNumeric(value);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const dotNet = trimmed.match(/Date\((\d+)\)/i);
+    if (dotNet && dotNet[1]) {
+      const asNumber = Number(dotNet[1]);
+      return normalizeNumeric(asNumber) ?? asNumber;
+    }
+
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric)) {
+      return normalizeNumeric(numeric);
+    }
+
+    const parsed = Date.parse(trimmed);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  return null;
+};
+
+const getUserCreationTime = (user) => {
+  if (!user || typeof user !== "object") {
+    return 0;
+  }
+
+  const raw = user.raw && typeof user.raw === "object" ? user.raw : null;
+  const creationKeys = [
+    "CreatedAt",
+    "createdAt",
+    "CreatedDate",
+    "createdDate",
+    "CreatedOn",
+    "createdOn",
+    "DateCreated",
+    "dateCreated",
+    "RegistrationDate",
+    "registrationDate",
+    "RegisteredAt",
+    "registeredAt",
+    "Created",
+    "created",
+    "InsertDate",
+    "insertDate",
+  ];
+
+  const timestamps = [];
+  creationKeys.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(user, key)) {
+      const parsed = parseTimestamp(user[key]);
+      if (parsed !== null) {
+        timestamps.push(parsed);
+      }
+    }
+    if (raw && Object.prototype.hasOwnProperty.call(raw, key)) {
+      const parsed = parseTimestamp(raw[key]);
+      if (parsed !== null) {
+        timestamps.push(parsed);
+      }
+    }
+  });
+
+  if (raw && typeof raw === "object") {
+    const audit = raw.Audit && typeof raw.Audit === "object" ? raw.Audit : null;
+    if (audit) {
+      const parsed = parseTimestamp(audit.CreatedAt ?? audit.createdAt);
+      if (parsed !== null) {
+        timestamps.push(parsed);
+      }
+    }
+  }
+
+  if (timestamps.length) {
+    return Math.max(...timestamps);
+  }
+
+  const idCandidates = [
+    user.UserID,
+    user.userID,
+    user.userId,
+    user.id,
+    raw?.UserID,
+    raw?.userID,
+    raw?.userId,
+    raw?.id,
+  ];
+
+  for (const candidate of idCandidates) {
+    const asNumber = Number(candidate);
+    if (!Number.isNaN(asNumber) && asNumber !== 0) {
+      return asNumber;
+    }
+  }
+
+  return 0;
+};
+
+const sortUsers = (users, sortOption) => {
+  if (!Array.isArray(users)) {
+    return [];
+  }
+
+  const copy = [...users];
+
+  switch (sortOption) {
+    case "oldest":
+      copy.sort((a, b) => getUserCreationTime(a) - getUserCreationTime(b));
+      break;
+    case "nameAsc":
+      copy.sort((a, b) => {
+        const nameA = getUserFullName(a);
+        const nameB = getUserFullName(b);
+        return nameA.localeCompare(nameB, undefined, { sensitivity: "base" });
+      });
+      break;
+    case "nameDesc":
+      copy.sort((a, b) => {
+        const nameA = getUserFullName(a);
+        const nameB = getUserFullName(b);
+        return nameB.localeCompare(nameA, undefined, { sensitivity: "base" });
+      });
+      break;
+    case "newest":
+    default:
+      copy.sort((a, b) => getUserCreationTime(b) - getUserCreationTime(a));
+      break;
+  }
+
+  return copy;
 };
 
 // Helper: returns filtered users array based on selected tab

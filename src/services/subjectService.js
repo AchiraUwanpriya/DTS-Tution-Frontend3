@@ -449,6 +449,215 @@ export const getStudentsBySubject = async (subjectId) => {
   return [];
 };
 
+export const getEnrolledSubjectsByStudent = async (studentId) => {
+  if (studentId === null || studentId === undefined) {
+    return [];
+  }
+
+  const trimmed = String(studentId).trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const encoded = encodeURIComponent(trimmed);
+  const baseUrl = axios?.defaults?.baseURL ?? "";
+  const baseHasApiSuffix = /\/api\/?$/i.test(String(baseUrl));
+
+  const candidateEndpoints = new Set([
+    `/Subjects/EnrolledByStudent/${encoded}`,
+    `/Subjects/EnrolledByStudent?studentId=${encoded}`,
+    `/Subjects/EnrolledByStudent?studentID=${encoded}`,
+  ]);
+
+  if (!baseHasApiSuffix) {
+    candidateEndpoints.add(`/api/Subjects/EnrolledByStudent/${encoded}`);
+    candidateEndpoints.add(
+      `/api/Subjects/EnrolledByStudent?studentId=${encoded}`
+    );
+    candidateEndpoints.add(
+      `/api/Subjects/EnrolledByStudent?studentID=${encoded}`
+    );
+  }
+
+  const extractArrayPayload = (data) => {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== "object") return null;
+
+    const candidates = [
+      data.data,
+      data.result,
+      data.results,
+      data.Subjects,
+      data.subjects,
+      data.payload,
+    ];
+
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) {
+        return candidate;
+      }
+    }
+
+    const firstArrayValue = Object.values(data).find((value) =>
+      Array.isArray(value)
+    );
+    return Array.isArray(firstArrayValue) ? firstArrayValue : null;
+  };
+
+  let lastError = null;
+
+  for (const endpoint of candidateEndpoints) {
+    try {
+      const response = await axios.get(endpoint);
+      const rawList = extractArrayPayload(response.data) ?? [];
+
+      const normalized = rawList
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") {
+            return null;
+          }
+
+          const courseIdCandidate =
+            entry.CourseID ??
+            entry.courseID ??
+            entry.courseId ??
+            entry.CourseId ??
+            entry.id ??
+            entry.Id ??
+            null;
+          const courseId = normalizeIdValue(courseIdCandidate);
+
+          const rawCourseName =
+            entry.CourseName ??
+            entry.courseName ??
+            entry.title ??
+            entry.Title ??
+            entry.name ??
+            "";
+          const courseName = String(rawCourseName || "").trim();
+
+          const subjectsSource =
+            entry.Subjects ?? entry.subjects ?? entry.Classes ?? entry.classes;
+
+          const subjectsArray = Array.isArray(subjectsSource)
+            ? subjectsSource
+            : [];
+
+          const seenSubjectKeys = new Set();
+          const normalizedSubjects = subjectsArray
+            .map((subject) => {
+              if (subject === null || subject === undefined) {
+                return null;
+              }
+
+              if (typeof subject !== "object") {
+                const subjectName = String(subject || "").trim();
+                if (!subjectName) return null;
+                const key = `name:${subjectName.toLowerCase()}`;
+                if (seenSubjectKeys.has(key)) return null;
+                seenSubjectKeys.add(key);
+                return {
+                  subjectId: null,
+                  SubjectID: null,
+                  subjectName,
+                  SubjectName: subjectName,
+                };
+              }
+
+              const subjectIdCandidate =
+                subject.SubjectID ??
+                subject.subjectID ??
+                subject.SubjectId ??
+                subject.subjectId ??
+                subject.id ??
+                subject.Id ??
+                null;
+              const subjectId = normalizeIdValue(subjectIdCandidate);
+
+              const rawSubjectName =
+                subject.SubjectName ??
+                subject.subjectName ??
+                subject.Name ??
+                subject.name ??
+                subject.Title ??
+                subject.title ??
+                "";
+              const subjectName = String(rawSubjectName || "").trim();
+              if (!subjectName) return null;
+
+              const key =
+                subjectId !== null && subjectId !== undefined
+                  ? `id:${subjectId}`
+                  : `name:${subjectName.toLowerCase()}`;
+              if (seenSubjectKeys.has(key)) return null;
+              seenSubjectKeys.add(key);
+
+              return {
+                subjectId,
+                SubjectID: subjectId,
+                subjectName,
+                SubjectName: subjectName,
+              };
+            })
+            .filter(Boolean);
+
+          const summaryKeyParts = [];
+          if (courseId !== null && courseId !== undefined) {
+            summaryKeyParts.push(`id:${courseId}`);
+          }
+          if (courseName) {
+            summaryKeyParts.push(`name:${courseName.toLowerCase()}`);
+          }
+          if (normalizedSubjects.length) {
+            summaryKeyParts.push(
+              normalizedSubjects
+                .map((subject) => {
+                  if (
+                    subject.subjectId !== null &&
+                    subject.subjectId !== undefined
+                  ) {
+                    return `sid:${subject.subjectId}`;
+                  }
+                  return `sname:${subject.subjectName.toLowerCase()}`;
+                })
+                .join("|")
+            );
+          }
+
+          return {
+            courseId,
+            CourseID: courseId,
+            courseName,
+            CourseName: courseName,
+            subjects: normalizedSubjects.map((subject) => ({
+              subjectId: subject.subjectId,
+              SubjectID: subject.SubjectID,
+              subjectName: subject.subjectName,
+              SubjectName: subject.SubjectName,
+            })),
+            key: summaryKeyParts.join("::") || undefined,
+          };
+        })
+        .filter(Boolean);
+
+      return normalized;
+    } catch (err) {
+      lastError = err;
+      continue;
+    }
+  }
+
+  if (lastError) {
+    console.error(
+      `Failed to fetch enrolled subjects for student ${studentId}`,
+      lastError
+    );
+    throw lastError;
+  }
+
+  return [];
+};
+
 // Update an existing subject
 export const updateSubject = async (subjectId, data) => {
   try {
@@ -600,4 +809,5 @@ export default {
   getSubjectById,
   // getLatestSubjectId,
   updateSubject,
+  getEnrolledSubjectsByStudent,
 };
