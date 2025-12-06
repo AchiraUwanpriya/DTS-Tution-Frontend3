@@ -826,7 +826,7 @@ const QRScanner = () => {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 text-center text-indigo-700 dark:text-indigo-300">
+      <h2 className="text-lg sm:text-2xl font-bold mb-6 text-center text-indigo-700 dark:text-indigo-300">
         Scan QR Code for Attendance
       </h2>
 
@@ -837,7 +837,7 @@ const QRScanner = () => {
           <select
             value={selectedCourseId}
             onChange={(e) => setSelectedCourseId(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full text-sm sm:text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">Select Course</option>
             {courses.map((c) => (
@@ -853,11 +853,12 @@ const QRScanner = () => {
 
         {/* Date Picker */}
         <div className="relative">
+            
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full text-sm sm:text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             aria-label="Session date"
           />
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -869,7 +870,7 @@ const QRScanner = () => {
         <div>
           <label
             htmlFor="session-start-time"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            className="block text-sm  font-medium text-gray-700 dark:text-gray-300 mb-1"
           >
             Session start
           </label>
@@ -879,7 +880,7 @@ const QRScanner = () => {
               type="time"
               value={sessionStartTime}
               onChange={(e) => setSessionStartTime(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full text-sm sm:text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               aria-label="Session start time"
             />
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -905,7 +906,7 @@ const QRScanner = () => {
                 setSessionEndTime(e.target.value);
                 setSessionEndModified(true);
               }}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border text-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               aria-label="Session end time"
             />
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -930,7 +931,7 @@ const QRScanner = () => {
 
       <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3">
         <Button
-          className="w-full sm:w-auto"
+          className="w-full sm:w-auto justify-center items-center"
           onClick={restartScanner}
           disabled={!canScan || status === "scanning" || status === "loading"}
         >

@@ -33,6 +33,7 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
     reset,
     formState: { errors },
   } = useForm();
+
   const [file, setFile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,16 +41,15 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(courseId ?? null);
 
-  const [subjects, setSubjects] = useState([]); // NEW
-  const [loadingSubjects, setLoadingSubjects] = useState(false); // NEW
-  const [selectedSubject, setSelectedSubject] = useState(""); // NEW
+  const [subjects, setSubjects] = useState([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState("");
 
   useEffect(() => {
     let mounted = true;
 
     const load = async () => {
-      // If a courseId was provided by parent, no need to load teacher courses
-      if (courseId) return;
+      if (courseId) return; // parent already chose the course
 
       const teacherId = resolveTeacherId(user);
       if (!teacherId) return;
@@ -111,7 +111,6 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
         }));
 
         setSubjects(courseSubjects);
-
         setSelectedSubject("");
       } catch (err) {
         console.error("Failed to load subjects for course", err);
@@ -153,6 +152,7 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
       setIsLoading(true);
       setError("");
       let fallbackFileUrl;
+
       const getFallbackFileUrl = () => {
         if (!fallbackFileUrl) {
           fallbackFileUrl = URL.createObjectURL(file);
@@ -177,6 +177,8 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
         FileType: file.type || file.name?.split?.(".").pop() || "",
         FilePath: file.name,
         IsVisible: true,
+        // You might later pass selectedSubject here if backend supports it
+        // SubjectID: selectedSubject ? Number(selectedSubject) : null,
       };
 
       const createdMaterial = await uploadMaterial(apiPayload);
@@ -217,6 +219,7 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
       reset({ title: "", description: "" });
       setFile(null);
     } catch (err) {
+      console.error(err);
       setError("Failed to upload material. Please try again.");
     } finally {
       setIsLoading(false);
@@ -240,165 +243,182 @@ const MaterialForm = ({ courseId, onSuccess, onCancel }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div className="space-y-3">
-        {/* Course selector - shown when parent didn't provide a courseId */}
-        {!courseId && (
-          <div>
-            <label
-              htmlFor="course"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Course
-            </label>
-            {loadingCourses ? (
-              <p className="mt-1 text-sm text-gray-500">Loading courses…</p>
-            ) : courses && courses.length ? (
-              <select
-                id="course"
-                value={selectedCourse ?? ""}
-                onChange={(e) => setSelectedCourse(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+    // 🔥 wrapper to control height & scrolling inside the modal
+    <div className="max-h-[70vh] sm:max-h-[75vh] flex flex-col">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1"
+      >
+        <div className="space-y-3">
+          {/* Course selector - shown when parent didn't provide a courseId */}
+          {!courseId && (
+            <div>
+              <label
+                htmlFor="course"
+                className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300"
               >
-                <option value="">-- Select a course --</option>
-                {courses.map((c) => {
-                  const cid = String(
-                    c.id ?? c.CourseID ?? c.CourseId ?? c.courseId ?? ""
-                  );
-                  const label =
-                    c.name ||
-                    c.CourseName ||
-                    c.title ||
-                    c.courseName ||
-                    `Course ${cid}`;
-                  return (
-                    <option key={cid} value={cid}>
-                      {label}
-                    </option>
-                  );
-                })}
-              </select>
-            ) : (
-              <p className="mt-1 text-sm text-gray-500">
-                No courses found for your account.
-              </p>
-            )}
+                Course
+              </label>
+              {loadingCourses ? (
+                <p className="mt-1 text-xs sm:text-sm text-gray-500">
+                  Loading courses…
+                </p>
+              ) : courses && courses.length ? (
+                <select
+                  id="course"
+                  value={selectedCourse ?? ""}
+                  onChange={(e) => setSelectedCourse(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
+                >
+                  <option value="">-- Select a course --</option>
+                  {courses.map((c) => {
+                    const cid = String(
+                      c.id ?? c.CourseID ?? c.CourseId ?? c.courseId ?? ""
+                    );
+                    const label =
+                      c.name ||
+                      c.CourseName ||
+                      c.title ||
+                      c.courseName ||
+                      `Course ${cid}`;
+                    return (
+                      <option key={cid} value={cid}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <p className="mt-1 text-xs sm:text-sm text-gray-500">
+                  No courses found for your account.
+                </p>
+              )}
+            </div>
+          )}
+
+          <label
+            htmlFor="title"
+            className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Title
+          </label>
+          <input
+            id="title"
+            type="text"
+            {...register("title", { required: "Title is required" })}
+            className="mt-1 p-2 sm:text-sm block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-xs"
+          />
+          {errors.title && (
+            <p className="mt-1 text-xs sm:text-sm text-red-600">
+              {errors.title.message}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label
+            htmlFor="description"
+            className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Description
+          </label>
+          <textarea
+            id="description"
+            rows={3}
+            {...register("description")}
+            className="mt-1 block p-2 sm:text-sm w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-xs"
+          />
+        </div>
+
+        <div className="space-y-3">
+          <label
+            htmlFor="classes"
+            className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Classes
+          </label>
+          {loadingSubjects ? (
+            <p className="mt-1 text-xs sm:text-sm text-gray-500">
+              Loading classes…
+            </p>
+          ) : subjects && subjects.length ? (
+            <select
+              id="classes"
+              value={selectedSubject ?? ""}
+              onChange={(e) => setSelectedSubject(e.target.value)}
+              className="mt-1  p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-xs sm:text-sm"
+            >
+              <option value="">-- Select a class --</option>
+              {subjects.map((subject) => {
+                const subjectId = String(subject.id);
+                const subjectLabel = subject.name;
+
+                return (
+                  <option key={subjectId} value={subjectId}>
+                    {subjectLabel}
+                  </option>
+                );
+              })}
+            </select>
+          ) : (
+            <p className="mt-1 text-xs sm:text-sm text-gray-500">
+              No classes found for this course.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="file"
+            className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            File
+          </label>
+          <input
+            id="file"
+            type="file"
+            onChange={handleFileChange}
+            className="mt-1 block w-full text-xs sm:text-sm text-gray-500
+              file:mr-4 file:py-2 file:px-4
+              file:rounded-md file:border-0
+              file:text-xs sm:file:text-sm file:font-semibold
+              file:bg-indigo-50 file:text-indigo-700
+              hover:file:bg-indigo-100
+              dark:file:bg-indigo-900 dark:file:text-indigo-100
+              dark:hover:file:bg-indigo-800"
+          />
+          {error && !file && (
+            <p className="mt-1 text-xs sm:text-sm text-red-600">{error}</p>
+          )}
+        </div>
+
+        {file && (
+          <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+            <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+              Selected file:{" "}
+              <span className="font-medium break-all">{file.name}</span> (
+              {Math.round(file.size / 1024)} KB)
+            </p>
           </div>
         )}
-        <label
-          htmlFor="title"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-        >
-          Title
-        </label>
-        <input
-          id="title"
-          type="text"
-          {...register("title", { required: "Title is required" })}
-          className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-        />
-        {errors.title && (
-          <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
-        )}
-      </div>
 
-      <div className="space-y-2">
-        <label
-          htmlFor="description"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-        >
-          Description
-        </label>
-        <textarea
-          id="description"
-          rows={3}
-          {...register("description")}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-        />
-      </div>
-
-      <div className="space-y-3">
-        <label
-          htmlFor="classes"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-        >
-          Classes
-        </label>
-        {loadingSubjects ? (
-          <p className="mt-1 text-sm text-gray-500">Loading classes…</p>
-        ) : subjects && subjects.length ? (
-          <select
-            id="classes"
-            value={selectedSubject ?? ""}
-            onChange={(e) => setSelectedSubject(e.target.value)}
-            className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+        {/* Buttons pinned to bottom area, but responsive */}
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-2">
+          <Button
+            type="button"
+            onClick={handleCancel}
+            variant="secondary"
+            disabled={isLoading}
+            className="items-center justify-center"
           >
-            <option value="">-- Select a class --</option>
-            {subjects.map((subject) => {
-              console.log("Subject:", subject); // { id: 8060, name: "Networking" }
-              const subjectId = String(subject.id);
-              const subjectLabel = subject.name;
-
-              return (
-                <option key={subjectId} value={subjectId}>
-                  {subjectLabel}
-                </option>
-              );
-            })}
-          </select>
-        ) : (
-          <p className="mt-1 text-sm text-gray-500">
-            No classes found for this course.
-          </p>
-        )}
-      </div>
-
-      <div>
-        <label
-          htmlFor="file"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-        >
-          File
-        </label>
-        <input
-          id="file"
-          type="file"
-          onChange={handleFileChange}
-          className="mt-1 block w-full text-sm text-gray-500
-            file:mr-4 file:py-2 file:px-4
-            file:rounded-md file:border-0
-            file:text-sm file:font-semibold
-            file:bg-indigo-50 file:text-indigo-700
-            hover:file:bg-indigo-100
-            dark:file:bg-indigo-900 dark:file:text-indigo-100
-            dark:hover:file:bg-indigo-800"
-        />
-        {error && !file && <p className="mt-1 text-sm text-red-600">{error}</p>}
-      </div>
-
-      {file && (
-        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-          <p className="text-sm text-gray-700 dark:text-gray-300">
-            Selected file: <span className="font-medium">{file.name}</span> (
-            {Math.round(file.size / 1024)} KB)
-          </p>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={isLoading} className="items-center justify-center">
+            {isLoading ? "Uploading..." : "Upload Material"}
+          </Button>
         </div>
-      )}
-
-      <div className="flex justify-end space-x-3 pt-2">
-        <Button
-          type="button"
-          onClick={handleCancel}
-          variant="secondary"
-          disabled={isLoading}
-        >
-          Cancel
-        </Button>
-        <Button type="submit" variant="primary" disabled={isLoading}>
-          {isLoading ? "Uploading..." : "Upload Material"}
-        </Button>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 };
 
