@@ -2706,6 +2706,11 @@ const AdminUsers = () => {
                   showRoleFields={
                     Boolean(selectedUser) ? editStep === 2 : createStep === 2
                   }
+                  onStudentCourseSelectionChange={
+                    isEditingStudentFlow
+                      ? handleStudentCourseSelectionChange
+                      : undefined
+                  }
                   submitLabel={
                     selectedUser
                       ? editStep === 1

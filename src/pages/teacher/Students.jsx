@@ -992,23 +992,23 @@ const TeacherStudents = () => {
     return subjectsCacheRef.current;
   };
 
-  const ensureSchedulesLoaded = async () => {
-    if (classSchedulesCacheRef.current) {
-      return classSchedulesCacheRef.current;
-    }
+  // const ensureSchedulesLoaded = async () => {
+  //   if (classSchedulesCacheRef.current) {
+  //     return classSchedulesCacheRef.current;
+  //   }
 
-    try {
-      const schedules = await getAllClassSchedules();
-      classSchedulesCacheRef.current = Array.isArray(schedules)
-        ? schedules
-        : [];
-    } catch (error) {
-      console.warn("Failed to load class schedules for class selection", error);
-      classSchedulesCacheRef.current = [];
-    }
+  //   try {
+  //     const schedules = await getAllClassSchedules();
+  //     classSchedulesCacheRef.current = Array.isArray(schedules)
+  //       ? schedules
+  //       : [];
+  //   } catch (error) {
+  //     console.warn("Failed to load class schedules for class selection", error);
+  //     classSchedulesCacheRef.current = [];
+  //   }
 
-    return classSchedulesCacheRef.current;
-  };
+  //   return classSchedulesCacheRef.current;
+  // };
 
   const loadClassOptionsForCourse = async (selectedCourseId) => {
     const normalizedId = normalizeIdString(selectedCourseId);
@@ -1048,14 +1048,14 @@ const TeacherStudents = () => {
 
     const [subjects, schedules] = await Promise.all([
       ensureSubjectsLoaded(),
-      ensureSchedulesLoaded(),
+      // ensureSchedulesLoaded(),
     ]);
 
     const options = deriveClassOptions(
       courseDetails,
       normalizedId,
       subjects,
-      schedules
+      // schedules
     );
     const payload = { options, courseName };
     classOptionsCacheRef.current.set(normalizedId, payload);
