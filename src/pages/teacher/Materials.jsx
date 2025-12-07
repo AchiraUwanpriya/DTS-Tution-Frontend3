@@ -1174,7 +1174,7 @@ const TeacherMaterials = () => {
       ) : (
         <div className="space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white border-l-4 border-indigo-500/60 dark:border-indigo-400/60 pl-3">
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white border-l-4 border-indigo-500/60 dark:border-indigo-400/60 pl-3">
               Your Courses & Materials
             </h1>
           </div>
@@ -1269,10 +1269,10 @@ const TeacherMaterials = () => {
                             }`}
                           />
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-white">
                               {c.name || c.CourseName || `Course ${cid}`}
                             </h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                               {c.subject ||
                                 c.subjectDetails?.name ||
                                 "Course materials"}
@@ -1286,7 +1286,7 @@ const TeacherMaterials = () => {
                               setModalCourseId(cid);
                               setShowModal(true);
                             }}
-                            className="w-full sm:w-auto bg-green-600 hover:bg-green-700 focus:ring-green-500 text-white"
+                            className="w-full text-sm  justify-center items-center sm:w-auto bg-green-600 hover:bg-green-700 focus:ring-green-500 text-white"
                           >
                             Upload for this course
                           </Button>
@@ -1306,7 +1306,7 @@ const TeacherMaterials = () => {
                                   <button
                                     type="button"
                                     onClick={() => setCourseTab(cid, "active")}
-                                    className={`px-4 py-2 text-sm font-medium rounded-l-lg transition-colors ${
+                                    className={`px-4 py-2 text-xs sm:text-sm font-medium rounded-l-lg transition-colors ${
                                       currentTab === "active"
                                         ? "bg-indigo-600 text-white"
                                         : "text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-800/40"
@@ -1319,7 +1319,7 @@ const TeacherMaterials = () => {
                                     onClick={() =>
                                       setCourseTab(cid, "inactive")
                                     }
-                                    className={`px-4 py-2 text-sm font-medium rounded-r-lg transition-colors ${
+                                    className={`px-4 py-2 text-xs sm:text-sm font-medium rounded-r-lg transition-colors ${
                                       currentTab === "inactive"
                                         ? "bg-indigo-600 text-white"
                                         : "text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-800/40"

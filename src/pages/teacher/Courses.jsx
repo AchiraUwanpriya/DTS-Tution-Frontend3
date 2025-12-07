@@ -70,7 +70,7 @@ const TeacherCourses = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-indigo-700 to-violet-700 dark:from-white dark:via-indigo-300 dark:to-violet-300">
+      <h1 className="text-xl sm:text-2xl font-sans tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-indigo-700 to-violet-700 dark:from-white dark:via-indigo-300 dark:to-violet-300">
         My Courses
       </h1>
 

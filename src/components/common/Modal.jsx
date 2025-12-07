@@ -39,11 +39,11 @@ const Modal = ({
       >
         <div
           className={`flex items-start gap-3 ${
-            showTitle ? "justify-between mb-3" : "justify-end mb-1"
+            showTitle ? "justify-between mb-3 p-2" : "justify-end mb-1"
           }`}
         >
           {showTitle ? (
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
               {title}
             </h2>
           ) : null}

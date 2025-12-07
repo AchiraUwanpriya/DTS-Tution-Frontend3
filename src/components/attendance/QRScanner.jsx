@@ -1455,7 +1455,7 @@ const QRScanner = () => {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 text-center text-indigo-700 dark:text-indigo-300">
+      <h2 className="text-lg sm:text-2xl font-bold mb-6 text-center text-indigo-700 dark:text-indigo-300">
         Scan QR Code for Attendance
       </h2>
 
@@ -1519,7 +1519,7 @@ const QRScanner = () => {
 
       <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3">
         <Button
-          className="w-full sm:w-auto"
+          className="w-full sm:w-auto justify-center items-center"
           onClick={restartScanner}
           disabled={!canScan || status === "scanning" || status === "loading"}
         >
