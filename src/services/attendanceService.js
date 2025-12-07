@@ -445,13 +445,8 @@ const findActiveSession = async ({ courseId, teacherId, qrCodeData } = {}) => {
   const normalizedCode = normalizeIdentifier(qrCodeData);
 
   const matchesCriteria = (session) => {
-    if (!session) {
+    if (!session || typeof session !== "object") {
       return false;
-    }
-
-    const sessionCode = getSessionQrCode(session);
-    if (normalizedCode && sessionCode === normalizedCode) {
-      return true;
     }
 
     if (!isSessionActive(session)) {
@@ -473,254 +468,22 @@ const findActiveSession = async ({ courseId, teacherId, qrCodeData } = {}) => {
     }
 
     if (normalizedCode) {
-      return sessionCode === normalizedCode;
+      const sessionCode = getSessionQrCode(session);
+      if (normalizeIdentifier(sessionCode) !== normalizedCode) {
+        return false;
+      }
     }
 
     return true;
   };
 
-  const tryFetch = async (endpoint, warnLabel) => {
-    try {
-      const sessions = await fetchSessions(endpoint);
-      return sessions.find(matchesCriteria) ?? null;
-    } catch (error) {
-      if (!isNotFound(error)) {
-        console.warn(`Failed to fetch sessions from ${warnLabel}`, error);
-      }
-      return null;
-    }
-  };
-
-  if (normalizedCourse) {
-    const session = await tryFetch(
-      `/QRSessions/Course/${normalizedCourse}`,
-      "course endpoint"
-    );
-    if (session) {
-      return session;
-    }
-  }
-
-  if (normalizedTeacher && !normalizedCourse) {
-    const session = await tryFetch(`/QRSessions`, "default endpoint");
-    if (session) {
-      return session;
-    }
-  }
-
-  const activeSession = await tryFetch(`/QRSessions/Active`, "active endpoint");
-  if (activeSession) {
-    return activeSession;
-  }
-
-  if (normalizedCode) {
-    const session = await tryFetch(`/QRSessions`, "default endpoint");
-    if (session) {
-      return session;
-    }
-  }
-
-  return null;
-};
-
-export const getCourseAttendance = async (courseId, teacherId) => {
-  const resolvedCourseId = resolveCourseId(courseId);
-
-  if (!resolvedCourseId) {
-    return [];
-  }
-
   try {
-    const sessions = await getQRSessionsByCourse(resolvedCourseId, teacherId);
-
-    if (Array.isArray(sessions) && sessions.length) {
-      const results = await Promise.allSettled(
-        sessions.map((session) => {
-          const sessionIdentifier = normalizeIdentifier(
-            session.SessionID ?? session.sessionId ?? session.id
-          );
-
-          if (!sessionIdentifier) {
-            return Promise.resolve([]);
-          }
-
-          return fetchAttendance(
-            `/Attendances/Session/${sessionIdentifier}`
-          ).then((records) =>
-            records.map((record) => ({
-              ...record,
-              session,
-              sessionId: record.sessionId ?? sessionIdentifier,
-              SessionID: record.SessionID ?? sessionIdentifier,
-              courseId:
-                record.courseId ??
-                record.CourseID ??
-                session.courseId ??
-                session.CourseID ??
-                resolvedCourseId,
-              CourseID:
-                record.CourseID ??
-                record.courseId ??
-                session.CourseID ??
-                session.courseId ??
-                resolvedCourseId,
-            }))
-          );
-        })
-      );
-
-      const aggregated = [];
-
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          aggregated.push(...result.value);
-        } else {
-          const error = result.reason;
-          if (!isNotFound(error)) {
-            console.warn("Failed to fetch attendance for a session", error);
-          }
-        }
-      }
-
-      if (aggregated.length) {
-        return aggregated;
-      }
-    }
+    const sessions = await getActiveQRSessions();
+    return sessions.find(matchesCriteria) ?? null;
   } catch (error) {
-    if (!isNotFound(error)) {
-      console.warn(
-        "Failed to load course sessions from API, attempting fallback",
-        error
-      );
-    }
+    console.error("Failed to find active QR session", error);
+    return null;
   }
-
-  try {
-    const records = await fetchAttendance(`/Attendances`, {
-      params: { courseId: resolvedCourseId },
-    });
-
-    if (records.length) {
-      return records;
-    }
-  } catch (error) {
-    if (!isNotFound(error)) {
-      console.error("Failed to load course attendance from API", error);
-      throw error;
-    }
-  }
-  return [];
-};
-
-export const getStudentAttendance = async (studentId) => {
-  const resolvedId = resolveStudentId(studentId);
-
-  if (!resolvedId) {
-    return [];
-  }
-
-  try {
-    return await fetchAttendance(`/Attendances/Student/${resolvedId}`);
-  } catch (error) {
-    if (!isNotFound(error)) {
-      console.error("Failed to load student attendance from API", error);
-      throw error;
-    }
-  }
-
-  try {
-    const records = await fetchAttendance(`/Attendances`, {
-      params: { studentId: resolvedId },
-    });
-
-    if (records.length) {
-      return records;
-    }
-  } catch (error) {
-    if (!isNotFound(error)) {
-      console.error("Failed to load student attendance from API", error);
-      throw error;
-    }
-  }
-  return [];
-};
-
-export const generateQRSession = async (sessionData = {}) => {
-  const source =
-    sessionData && typeof sessionData === "object" ? sessionData : {};
-
-  const courseId =
-    source.CourseID ??
-    source.courseID ??
-    source.courseId ??
-    source.course ??
-    null;
-  const teacherId =
-    source.TeacherID ??
-    source.teacherID ??
-    source.teacherId ??
-    source.teacher ??
-    null;
-
-  const normalizedCourseId = toNumericId(courseId);
-  const normalizedTeacherId = toNumericId(teacherId);
-
-  const durationSource =
-    source.DurationMinutes ??
-    source.durationMinutes ??
-    source.duration ??
-    source.length ??
-    15;
-
-  const parsedDuration = Number(durationSource);
-  const durationMinutes =
-    Number.isFinite(parsedDuration) && parsedDuration > 0
-      ? Math.round(parsedDuration)
-      : 15;
-
-  const startTime =
-    toIsoOrNull(source.StartTime ?? source.startTime) ??
-    toIsoOrNull(source.SessionStart);
-  const endTime =
-    toIsoOrNull(source.EndTime ?? source.endTime) ??
-    (startTime
-      ? new Date(
-          new Date(startTime).getTime() + durationMinutes * 60000
-        ).toISOString()
-      : null);
-  // Ensure expiry equals session end time unless an explicit expiry was provided
-  const expiryTime =
-    toIsoOrNull(source.ExpiryTime ?? source.expiryTime) ?? endTime ?? null;
-
-  const body = sanitizeRecordPayload({
-    CourseID: normalizedCourseId,
-    TeacherID: normalizedTeacherId,
-    DurationMinutes: durationMinutes,
-    SessionDate:
-      toIsoOrNull(source.SessionDate ?? source.sessionDate) ??
-      startTime ??
-      new Date().toISOString(),
-    StartTime: startTime,
-    EndTime: endTime,
-    ExpiryTime: expiryTime,
-    Location: source.Location ?? source.location ?? null,
-  });
-
-  try {
-    const response = await axios.post(`/QRSessions/GenerateForClass`, body);
-    const session = buildQrSession(response.data);
-    if (session) {
-      return session;
-    }
-
-    if (response.data && typeof response.data === "object") {
-      return { ...response.data };
-    }
-  } catch (error) {
-    console.error("Failed to generate QR session via API", error);
-    throw error;
-  }
-  return null;
 };
 
 export const recordAttendance = async (arg1, arg2) => {
@@ -734,127 +497,61 @@ export const recordAttendance = async (arg1, arg2) => {
   const resolvedStudentId =
     payload.studentId ?? payload.StudentID ?? payload.studentID ?? null;
 
-  if (!resolvedStudentId && resolvedStudentId !== 0) {
+  if (resolvedStudentId === null || resolvedStudentId === undefined) {
     throw new Error("Student ID is required to record attendance.");
   }
 
-  const resolvedSessionId =
+  const studentIdNumeric = toNumericId(resolvedStudentId);
+  if (studentIdNumeric === null) {
+    throw new Error("Student ID must be numeric to record attendance.");
+  }
+
+  const initialSessionId =
     payload.sessionId ??
     payload.SessionID ??
     payload.sessionID ??
+    payload.SessionId ??
     payload.id ??
     payload.Id ??
     null;
 
-  const resolvedCourseId =
+  let sessionIdNumeric = toNumericId(initialSessionId);
+
+  let normalizedCourseId = resolveCourseId(
     payload.courseId ??
-    payload.CourseID ??
-    payload.courseID ??
-    payload.Course?.CourseID ??
-    payload.Course?.courseId ??
-    null;
+      payload.CourseID ??
+      payload.courseID ??
+      payload.CourseId ??
+      payload.Course?.CourseID ??
+      payload.Course?.courseId ??
+      null
+  );
 
-  const resolvedTeacherId =
+  let normalizedTeacherId = resolveTeacherId(
     payload.teacherId ??
-    payload.TeacherID ??
-    payload.teacherID ??
-    payload.Teacher?.TeacherID ??
-    payload.Teacher?.teacherId ??
-    null;
+      payload.TeacherID ??
+      payload.teacherID ??
+      payload.TeacherId ??
+      payload.Teacher?.TeacherID ??
+      payload.Teacher?.teacherId ??
+      null
+  );
 
-  const rawQrCodeData =
+  let normalizedSubjectId = normalizeIdentifier(
+    payload.subjectId ??
+      payload.SubjectID ??
+      payload.subjectID ??
+      payload.SubjectId ??
+      payload.Subject?.SubjectID ??
+      payload.Subject?.subjectId ??
+      null
+  );
+
+  const qrCodeData =
     payload.QRCodeData ?? payload.qrCodeData ?? payload.code ?? payload.QRCode;
-  let normalizedQrCode = normalizeIdentifier(rawQrCodeData);
+  const normalizedQrCode = normalizeIdentifier(qrCodeData);
 
-  const normalizedCourseId = resolveCourseId(resolvedCourseId);
-  const normalizedTeacherId = resolveTeacherId(resolvedTeacherId);
-
-  let sessionIdNumeric = toNumericId(resolvedSessionId);
-  const studentIdNumeric = toNumericId(resolvedStudentId);
-
-  const statusValue =
-    payload.status ??
-    payload.Status ??
-    payload.attendanceStatus ??
-    ATTENDANCE_STATUS.PRESENT;
-
-  const baseDeviceInfo = payload.DeviceInfo ?? payload.deviceInfo ?? null;
-  const baseIpAddress =
-    payload.IPAddress ?? payload.ipAddress ?? payload.ip ?? null;
-  const baseLocation = payload.Location ?? payload.location ?? null;
-
-  const resolvedSessionStart =
-    payload.sessionStartTime ??
-    payload.SessionStartTime ??
-    payload.sessionStart ??
-    payload.SessionStart ??
-    payload.startTime ??
-    payload.StartTime ??
-    null;
-
-  const resolvedSessionEnd =
-    payload.sessionEndTime ??
-    payload.SessionEndTime ??
-    payload.sessionEnd ??
-    payload.SessionEnd ??
-    payload.endTime ??
-    payload.EndTime ??
-    null;
-
-  const sessionStartIso = toIsoOrNull(resolvedSessionStart);
-  const sessionEndIso = toIsoOrNull(resolvedSessionEnd);
-
-  const resolvedAttendanceDateInput =
-    payload.attendanceDate ?? payload.AttendanceDate ?? payload.date ?? null;
-
-  const resolvedSessionDateInput =
-    payload.sessionDate ??
-    payload.SessionDate ??
-    resolvedAttendanceDateInput ??
-    null;
-
-  const attendanceDateIso =
-    toIsoOrNull(resolvedAttendanceDateInput) ??
-    (sessionStartIso ? new Date(sessionStartIso).toISOString() : null);
-
-  const sessionDateIso =
-    toIsoOrNull(resolvedSessionDateInput) ??
-    attendanceDateIso ??
-    (sessionEndIso ? new Date(sessionEndIso).toISOString() : null);
-
-  const sessionBodyBase = {
-    SessionID: sessionIdNumeric,
-    StudentID: studentIdNumeric,
-    Status: mapAttendanceStatus(statusValue),
-    DeviceInfo: baseDeviceInfo,
-    IPAddress: baseIpAddress,
-    Location: baseLocation,
-    ScanTime:
-      toIsoOrNull(payload.ScanTime ?? payload.scanTime ?? payload.timestamp) ??
-      new Date().toISOString(),
-    SessionStartTime: sessionStartIso,
-    SessionEndTime: sessionEndIso,
-    StartTime: sessionStartIso,
-    EndTime: sessionEndIso,
-    SessionDate: sessionDateIso,
-    AttendanceDate: attendanceDateIso,
-  };
-
-  const qrRecordBodyBase = {
-    QRCodeData: rawQrCodeData,
-    StudentID: studentIdNumeric,
-    DeviceInfo: baseDeviceInfo,
-    IPAddress: baseIpAddress,
-    Location: baseLocation,
-    SessionStartTime: sessionStartIso,
-    SessionEndTime: sessionEndIso,
-    StartTime: sessionStartIso,
-    EndTime: sessionEndIso,
-    SessionDate: sessionDateIso,
-    AttendanceDate: attendanceDateIso,
-  };
-
-  if (!sessionIdNumeric || Number.isNaN(sessionIdNumeric)) {
+  if (sessionIdNumeric === null) {
     const activeSession = await findActiveSession({
       courseId: normalizedCourseId,
       teacherId: normalizedTeacherId,
@@ -864,153 +561,277 @@ export const recordAttendance = async (arg1, arg2) => {
     if (activeSession) {
       sessionIdNumeric = toNumericId(
         activeSession.SessionID ??
-          activeSession.sessionID ??
           activeSession.sessionId ??
-          activeSession.id
+          activeSession.sessionID ??
+          activeSession.id ??
+          null
       );
 
-      if (sessionIdNumeric && !Number.isNaN(sessionIdNumeric)) {
-        sessionBodyBase.SessionID = sessionIdNumeric;
+      if (!normalizedCourseId) {
+        normalizedCourseId = getSessionCourseId(activeSession);
       }
 
-      if (!normalizedQrCode) {
-        const sessionCode = getSessionQrCode(activeSession);
-        if (sessionCode) {
-          normalizedQrCode = sessionCode;
-          qrRecordBodyBase.QRCodeData =
-            activeSession.QRCodeData ?? activeSession.qrCodeData ?? sessionCode;
-        }
+      if (!normalizedTeacherId) {
+        normalizedTeacherId = getSessionTeacherId(activeSession);
       }
-    }
-  }
 
-  if (
-    (!sessionIdNumeric || Number.isNaN(sessionIdNumeric)) &&
-    normalizedCourseId &&
-    normalizedTeacherId
-  ) {
-    try {
-      const freshSession = await generateQRSession({
-        CourseID: normalizedCourseId,
-        TeacherID: normalizedTeacherId,
-        DurationMinutes:
-          payload.DurationMinutes ??
-          payload.durationMinutes ??
-          payload.duration ??
-          15,
-      });
-
-      if (freshSession) {
-        sessionIdNumeric = toNumericId(
-          freshSession.SessionID ??
-            freshSession.sessionID ??
-            freshSession.sessionId ??
-            freshSession.id
+      if (!normalizedSubjectId) {
+        normalizedSubjectId = normalizeIdentifier(
+          activeSession?.SubjectID ??
+            activeSession?.subjectID ??
+            activeSession?.SubjectId ??
+            activeSession?.subjectId ??
+            activeSession?.Subject?.SubjectID ??
+            activeSession?.Subject?.subjectId ??
+            null
         );
-
-        if (sessionIdNumeric && !Number.isNaN(sessionIdNumeric)) {
-          sessionBodyBase.SessionID = sessionIdNumeric;
-        }
-
-        const sessionCode = getSessionQrCode(freshSession);
-        if (sessionCode) {
-          normalizedQrCode = sessionCode;
-          qrRecordBodyBase.QRCodeData =
-            freshSession.QRCodeData ?? freshSession.qrCodeData ?? sessionCode;
-        }
       }
-    } catch (error) {
-      console.warn("Failed to auto-create QR session for attendance", error);
     }
   }
 
-  const sessionBody = sanitizeRecordPayload(sessionBodyBase);
-  const qrRecordBody = sanitizeRecordPayload(qrRecordBodyBase);
+  if (sessionIdNumeric === null) {
+    throw new Error("A valid session ID is required to record attendance.");
+  }
+
+  const statusValue = mapAttendanceStatus(
+    payload.status ?? payload.Status ?? payload.attendanceStatus
+  );
+
+  const scanTimeIso =
+    toIsoOrNull(payload.scanTime ?? payload.ScanTime ?? payload.timestamp) ??
+    new Date().toISOString();
+
+  const deviceInfo = normalizeIdentifier(
+    payload.DeviceInfo ?? payload.deviceInfo ?? null
+  );
+  const ipAddress = normalizeIdentifier(
+    payload.IPAddress ?? payload.ipAddress ?? payload.ip ?? null
+  );
+
+  const courseIdNumeric = toNumericId(normalizedCourseId);
+  const teacherIdNumeric = toNumericId(normalizedTeacherId);
+  const subjectIdNumeric = toNumericId(normalizedSubjectId);
+
+  const sessionStartIso =
+    toIsoOrNull(
+      payload.sessionStartTime ??
+        payload.SessionStartTime ??
+        payload.sessionStart ??
+        payload.SessionStart ??
+        payload.StartTime ??
+        payload.startTime ??
+        null
+    ) ?? null;
+
+  const sessionEndIso =
+    toIsoOrNull(
+      payload.sessionEndTime ??
+        payload.SessionEndTime ??
+        payload.sessionEnd ??
+        payload.SessionEnd ??
+        payload.EndTime ??
+        payload.endTime ??
+        null
+    ) ?? null;
+
+  const sessionDateIso =
+    toIsoOrNull(
+      payload.sessionDate ??
+        payload.SessionDate ??
+        payload.session_date ??
+        payload.sessiondate ??
+        null
+    ) ??
+    sessionStartIso ??
+    scanTimeIso;
+
+  const attendanceDateIso =
+    toIsoOrNull(
+      payload.attendanceDate ??
+        payload.AttendanceDate ??
+        payload.date ??
+        payload.Date ??
+        null
+    ) ??
+    sessionDateIso ??
+    scanTimeIso;
+
+  const requestBody = {
+    SessionID: sessionIdNumeric,
+    StudentID: studentIdNumeric,
+    Status: statusValue,
+    ScanTime: scanTimeIso,
+  };
+
+  if (courseIdNumeric !== null) {
+    requestBody.CourseID = courseIdNumeric;
+  } else if (normalizedCourseId) {
+    requestBody.CourseID = normalizedCourseId;
+  }
+
+  if (teacherIdNumeric !== null) {
+    requestBody.TeacherID = teacherIdNumeric;
+  } else if (normalizedTeacherId) {
+    requestBody.TeacherID = normalizedTeacherId;
+  }
+
+  if (subjectIdNumeric !== null) {
+    requestBody.SubjectID = subjectIdNumeric;
+  } else if (normalizedSubjectId) {
+    requestBody.SubjectID = normalizedSubjectId;
+  }
+
+  if (deviceInfo) {
+    requestBody.DeviceInfo = deviceInfo;
+  }
+  if (ipAddress) {
+    requestBody.IPAddress = ipAddress;
+  }
+
+  const rawLocation = payload.Location ?? payload.location ?? null;
+  if (rawLocation && typeof rawLocation === "string" && rawLocation.trim()) {
+    requestBody.Location = rawLocation.trim();
+  }
+
+  if (sessionStartIso) {
+    requestBody.SessionStartTime = sessionStartIso;
+    requestBody.StartTime = sessionStartIso;
+  }
+
+  if (sessionEndIso) {
+    requestBody.SessionEndTime = sessionEndIso;
+    requestBody.EndTime = sessionEndIso;
+  }
+
+  if (sessionDateIso) {
+    requestBody.SessionDate = sessionDateIso;
+  }
+
+  if (attendanceDateIso) {
+    requestBody.AttendanceDate = attendanceDateIso;
+  }
 
   try {
-    const hasSessionPayload =
-      Object.prototype.hasOwnProperty.call(sessionBody, "SessionID") &&
-      Object.prototype.hasOwnProperty.call(sessionBody, "StudentID");
+    const response = await axios.post(`/Attendances`, requestBody);
+    const responseData = response?.data ?? {};
 
-    const hasQrPayload =
-      Object.prototype.hasOwnProperty.call(qrRecordBody, "QRCodeData") &&
-      Object.prototype.hasOwnProperty.call(qrRecordBody, "StudentID");
+    const enriched = {
+      ...responseData,
+      AttendanceID:
+        responseData.AttendanceID ??
+        responseData.attendanceID ??
+        responseData.AttendanceId ??
+        responseData.attendanceId ??
+        null,
+      SessionID:
+        responseData.SessionID ??
+        responseData.sessionID ??
+        responseData.SessionId ??
+        responseData.sessionId ??
+        sessionIdNumeric,
+      StudentID:
+        responseData.StudentID ??
+        responseData.studentID ??
+        responseData.StudentId ??
+        responseData.studentId ??
+        studentIdNumeric,
+      CourseID:
+        responseData.CourseID ??
+        responseData.courseID ??
+        responseData.CourseId ??
+        responseData.courseId ??
+        (courseIdNumeric !== null ? courseIdNumeric : normalizedCourseId) ??
+        null,
+      SubjectID:
+        responseData.SubjectID ??
+        responseData.subjectID ??
+        responseData.SubjectId ??
+        responseData.subjectId ??
+        (subjectIdNumeric !== null ? subjectIdNumeric : normalizedSubjectId) ??
+        null,
+      TeacherID:
+        responseData.TeacherID ??
+        responseData.teacherID ??
+        responseData.TeacherId ??
+        responseData.teacherId ??
+        (teacherIdNumeric !== null ? teacherIdNumeric : normalizedTeacherId) ??
+        null,
+      ScanTime: responseData.ScanTime ?? responseData.scanTime ?? scanTimeIso,
+      Status: responseData.Status ?? responseData.status ?? statusValue,
+      SessionStartTime:
+        responseData.SessionStartTime ??
+        responseData.sessionStartTime ??
+        responseData.SessionStart ??
+        sessionStartIso ??
+        null,
+      SessionEndTime:
+        responseData.SessionEndTime ??
+        responseData.sessionEndTime ??
+        responseData.SessionEnd ??
+        sessionEndIso ??
+        null,
+      SessionDate:
+        responseData.SessionDate ??
+        responseData.sessionDate ??
+        sessionDateIso ??
+        null,
+      AttendanceDate:
+        responseData.AttendanceDate ??
+        responseData.attendanceDate ??
+        attendanceDateIso ??
+        null,
+    };
 
-    let response;
+    const record = buildAttendanceRecord({
+      ...enriched,
+      CourseID: enriched.CourseID,
+      courseId: enriched.CourseID,
+      SessionID: enriched.SessionID,
+      sessionId: enriched.SessionID,
+      StudentID: enriched.StudentID,
+      studentId: enriched.StudentID,
+      SubjectID: enriched.SubjectID,
+      subjectId: enriched.SubjectID,
+      TeacherID: enriched.TeacherID,
+      teacherId: enriched.TeacherID,
+    });
 
-    if (hasSessionPayload) {
-      response = await axios.post(`/Attendances`, sessionBody);
-    } else if (hasQrPayload) {
-      response = await axios.post(`/Attendances/Record`, qrRecordBody);
-    } else {
-      throw new Error(
-        "Unable to determine the QR session for this attendance record."
-      );
-    }
-
-    const record = buildAttendanceRecord(response.data);
     if (record) {
       return record;
     }
 
-    const responsePayload = response.data || {};
     return {
-      id: Math.random().toString(36).substring(7),
-      sessionId:
-        responsePayload.sessionId ??
-        responsePayload.SessionID ??
-        sessionBody.SessionID ??
-        null,
-      studentId: String(resolvedStudentId),
-      courseId:
-        responsePayload.courseId ??
-        responsePayload.CourseID ??
-        normalizedCourseId ??
-        null,
-      teacherId:
-        responsePayload.teacherId ??
-        responsePayload.TeacherID ??
-        normalizedTeacherId ??
-        null,
-      scanTime:
-        responsePayload.scanTime ??
-        responsePayload.ScanTime ??
-        sessionBody.ScanTime ??
-        new Date().toISOString(),
-      sessionStartTime:
-        responsePayload.sessionStartTime ??
-        responsePayload.SessionStartTime ??
-        responsePayload.sessionStart ??
-        responsePayload.SessionStart ??
-        responsePayload.startTime ??
-        responsePayload.StartTime ??
-        sessionBody.SessionStartTime ??
-        null,
-      sessionEndTime:
-        responsePayload.sessionEndTime ??
-        responsePayload.SessionEndTime ??
-        responsePayload.sessionEnd ??
-        responsePayload.SessionEnd ??
-        responsePayload.endTime ??
-        responsePayload.EndTime ??
-        sessionBody.SessionEndTime ??
-        null,
-      status: mapAttendanceStatus(
-        responsePayload.status ??
-          responsePayload.Status ??
-          sessionBody.Status ??
-          statusValue
-      ),
-      attendanceDate:
-        responsePayload.attendanceDate ??
-        responsePayload.AttendanceDate ??
-        toIsoDate(
-          payload.attendanceDate ?? payload.AttendanceDate ?? payload.date
-        ),
+      attendanceId: enriched.AttendanceID,
+      sessionId: enriched.SessionID,
+      studentId: enriched.StudentID,
+      status: enriched.Status,
+      ScanTime: enriched.ScanTime,
+      courseId: enriched.CourseID,
+      CourseID: enriched.CourseID,
+      subjectId: enriched.SubjectID,
+      SubjectID: enriched.SubjectID,
+      teacherId: enriched.TeacherID,
+      TeacherID: enriched.TeacherID,
+      sessionStartTime: enriched.SessionStartTime,
+      sessionEndTime: enriched.SessionEndTime,
+      sessionDate: enriched.SessionDate,
+      SessionDate: enriched.SessionDate,
+      attendanceDate: enriched.AttendanceDate,
+      AttendanceDate: enriched.AttendanceDate,
+      raw: responseData,
     };
   } catch (error) {
+    const message =
+      error?.response?.data?.message ??
+      error?.response?.data?.Message ??
+      error?.response?.data?.error ??
+      error?.response?.data?.Error ??
+      error?.message ??
+      "Failed to record attendance";
     console.error("Failed to record attendance via API", error);
-    throw error;
+    const wrapped = new Error(String(message));
+    wrapped.cause = error;
+    throw wrapped;
   }
 };
 
@@ -1085,4 +906,67 @@ export const getQRSession = async (sessionId) => {
   }
 
   return null;
+};
+
+export const generateQRSession = async (body) => {
+  try {
+    // Try dedicated generate endpoint first, fall back to creating a session
+    try {
+      const response = await axios.post(`/QRSessions/Generate`, body ?? {});
+      return buildQrSession(response.data);
+    } catch (err) {
+      const response = await axios.post(`/QRSessions`, body ?? {});
+      return buildQrSession(response.data);
+    }
+  } catch (error) {
+    console.error("Failed to generate QR session", error);
+    throw error;
+  }
+};
+
+export const getStudentAttendance = async (studentId) => {
+  const resolved = resolveStudentId(studentId);
+  if (!resolved) {
+    return [];
+  }
+
+  try {
+    // Try a resource-style endpoint, fall back to query param
+    try {
+      return await fetchAttendance(`/Attendances/Student/${resolved}`);
+    } catch (err) {
+      return await fetchAttendance(`/Attendances`, {
+        params: { studentId: resolved },
+      });
+    }
+  } catch (error) {
+    if (!isNotFound(error)) {
+      console.error("Failed to fetch student attendance", error);
+    }
+  }
+
+  return [];
+};
+
+export const getCourseAttendance = async (courseId) => {
+  const resolved = resolveCourseId(courseId);
+  if (!resolved) {
+    return [];
+  }
+
+  try {
+    try {
+      return await fetchAttendance(`/Attendances/Course/${resolved}`);
+    } catch (err) {
+      return await fetchAttendance(`/Attendances`, {
+        params: { courseId: resolved },
+      });
+    }
+  } catch (error) {
+    if (!isNotFound(error)) {
+      console.error("Failed to fetch course attendance", error);
+    }
+  }
+
+  return [];
 };

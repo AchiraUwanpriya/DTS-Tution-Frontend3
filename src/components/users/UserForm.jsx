@@ -1845,14 +1845,14 @@ const UserForm = ({
                     >
                       Manage Courses
                     </Button>
-                    <Button
+                    {/* <Button
                       type="button"
                       variant="ghost"
                       onClick={() => setShowCourseModal(true)}
                       className="w-full justify-center sm:w-auto"
                     >
                       + Add New Course
-                    </Button>
+                    </Button> */}
                   </div>
                 </div>
               </div>

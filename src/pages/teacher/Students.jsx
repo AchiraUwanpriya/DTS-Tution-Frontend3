@@ -270,11 +270,13 @@ const deriveClassOptions = (
       label: resolvedLabel,
       code: codeCandidate,
       courseSubjectId: resolvedCourseSubjectId,
+      source: extra?.source ?? existing?.source ?? null,
     };
 
     option.label = resolvedLabel;
     option.code = codeCandidate;
     option.courseSubjectId = resolvedCourseSubjectId;
+    option.source = extra?.source ?? option.source ?? null;
 
     attachScheduleMeta(option, normalizedId);
 
@@ -330,6 +332,7 @@ const deriveClassOptions = (
               entry.CourseSubjectId ??
               entry.CourseSubjectID ??
               null,
+            source: "courseDetails",
           }
         );
       });
@@ -367,6 +370,7 @@ const deriveClassOptions = (
               entry.CourseSubjectId ??
               entry.CourseSubjectID ??
               null,
+            source: "courseDetails",
           }
         );
       });
@@ -421,20 +425,25 @@ const deriveClassOptions = (
       });
     }
 
-    if (
-      normalizedCourseId &&
-      courseIdCandidates.size &&
-      !courseIdCandidates.has(normalizedCourseId)
-    ) {
-      return;
+    if (normalizedCourseId) {
+      if (!courseIdCandidates.size) {
+        return;
+      }
+
+      if (!courseIdCandidates.has(normalizedCourseId)) {
+        return;
+      }
     }
 
     registerOption(normalizedSubjectId, subject.name ?? subject.SubjectName, {
       code: subject.subjectCode ?? subject.code ?? subject.Code ?? null,
+      source: "subjectsFallback",
     });
   };
 
-  subjects.forEach(pushSubjectCourseMatches);
+  if (!options.length) {
+    subjects.forEach(pushSubjectCourseMatches);
+  }
 
   subjectScheduleMap.forEach((scheduleList, subjectId) => {
     if (optionMap.has(subjectId)) {
@@ -447,12 +456,20 @@ const deriveClassOptions = (
     registerOption(
       subjectId,
       firstSchedule?.subjectName ?? firstSchedule?.SubjectName,
-      {}
+      { source: "scheduleFallback" }
     );
   });
 
-  options.sort((a, b) => a.label.localeCompare(b.label));
-  return options;
+  const hasCourseSpecific = options.some(
+    (option) => option.source === "courseDetails"
+  );
+
+  const filteredOptions = hasCourseSpecific
+    ? options.filter((option) => option.source === "courseDetails")
+    : options;
+
+  filteredOptions.sort((a, b) => a.label.localeCompare(b.label));
+  return filteredOptions;
 };
 
 const deriveTeacherCourseIdSet = (courses) => {
@@ -992,23 +1009,23 @@ const TeacherStudents = () => {
     return subjectsCacheRef.current;
   };
 
-  const ensureSchedulesLoaded = async () => {
-    if (classSchedulesCacheRef.current) {
-      return classSchedulesCacheRef.current;
-    }
+  // const ensureSchedulesLoaded = async () => {
+  //   if (classSchedulesCacheRef.current) {
+  //     return classSchedulesCacheRef.current;
+  //   }
 
-    try {
-      const schedules = await getAllClassSchedules();
-      classSchedulesCacheRef.current = Array.isArray(schedules)
-        ? schedules
-        : [];
-    } catch (error) {
-      console.warn("Failed to load class schedules for class selection", error);
-      classSchedulesCacheRef.current = [];
-    }
+  //   try {
+  //     const schedules = await getAllClassSchedules();
+  //     classSchedulesCacheRef.current = Array.isArray(schedules)
+  //       ? schedules
+  //       : [];
+  //   } catch (error) {
+  //     console.warn("Failed to load class schedules for class selection", error);
+  //     classSchedulesCacheRef.current = [];
+  //   }
 
-    return classSchedulesCacheRef.current;
-  };
+  //   return classSchedulesCacheRef.current;
+  // };
 
   const loadClassOptionsForCourse = async (selectedCourseId) => {
     const normalizedId = normalizeIdString(selectedCourseId);
@@ -1017,7 +1034,15 @@ const TeacherStudents = () => {
     }
 
     if (classOptionsCacheRef.current.has(normalizedId)) {
-      return classOptionsCacheRef.current.get(normalizedId);
+      const cached = classOptionsCacheRef.current.get(normalizedId);
+      const needsRefresh =
+        !cached ||
+        !Array.isArray(cached.options) ||
+        cached.options.some((option) => option?.source == null);
+      if (!needsRefresh) {
+        return cached;
+      }
+      classOptionsCacheRef.current.delete(normalizedId);
     }
 
     let courseDetails = null;
@@ -1048,14 +1073,14 @@ const TeacherStudents = () => {
 
     const [subjects, schedules] = await Promise.all([
       ensureSubjectsLoaded(),
-      ensureSchedulesLoaded(),
+      // ensureSchedulesLoaded(),
     ]);
 
     const options = deriveClassOptions(
       courseDetails,
       normalizedId,
-      subjects,
-      schedules
+      subjects
+      // schedules
     );
     const payload = { options, courseName };
     classOptionsCacheRef.current.set(normalizedId, payload);
@@ -1967,7 +1992,7 @@ const TeacherStudents = () => {
         )}
       </AnimatePresence> */}
 
-       <AnimatePresence>
+      <AnimatePresence>
         {isCreateOpen && (
           <motion.div
             initial={{ opacity: 0 }}

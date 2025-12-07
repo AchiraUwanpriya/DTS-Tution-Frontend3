@@ -57,6 +57,216 @@ const mapMaterial = (material) => {
     material.teacherDetails ||
     {};
 
+  const subjectCandidates = [
+    material.Subject,
+    material.subject,
+    material.SubjectDetails,
+    material.subjectDetails,
+    material.SubjectInfo,
+    material.subjectInfo,
+    material.Class,
+    material.class,
+    material.ClassDetails,
+    material.classDetails,
+    material.CourseSubject,
+    material.courseSubject,
+    material.SubjectData,
+    material.subjectData,
+    material.SubjectMetadata,
+    material.subjectMetadata,
+    material.SubjectRecord,
+    material.subjectRecord,
+    material.SubjectEntity,
+    material.subjectEntity,
+    material.SubjectModel,
+    material.subjectModel,
+    material.SubjectRef,
+    material.subjectRef,
+    material.SubjectInfoModel,
+    material.subjectInfoModel,
+    material?.raw?.Subject,
+    material?.raw?.subject,
+    material?.raw?.SubjectDetails,
+    material?.raw?.subjectDetails,
+    material?.raw?.SubjectInfo,
+    material?.raw?.subjectInfo,
+    material?.raw?.Class,
+    material?.raw?.class,
+    material?.raw?.ClassDetails,
+    material?.raw?.classDetails,
+    material?.raw?.CourseSubject,
+    material?.raw?.courseSubject,
+    material?.raw?.SubjectData,
+    material?.raw?.subjectData,
+    material?.raw?.SubjectMetadata,
+    material?.raw?.subjectMetadata,
+    material?.raw?.SubjectRecord,
+    material?.raw?.subjectRecord,
+    material?.raw?.SubjectEntity,
+    material?.raw?.subjectEntity,
+    material?.raw?.SubjectModel,
+    material?.raw?.subjectModel,
+    material?.raw?.SubjectRef,
+    material?.raw?.subjectRef,
+    material?.raw?.SubjectInfoModel,
+    material?.raw?.subjectInfoModel,
+    course.Subject,
+    course.subject,
+    course.SubjectDetails,
+    course.subjectDetails,
+    course.SubjectInfo,
+    course.subjectInfo,
+  ];
+
+  let subject = null;
+  for (const candidate of subjectCandidates) {
+    if (candidate !== undefined && candidate !== null) {
+      subject = candidate;
+      break;
+    }
+  }
+
+  const resolveFirstDefined = (...candidates) => {
+    for (const candidate of candidates) {
+      if (candidate === undefined || candidate === null) continue;
+      if (Array.isArray(candidate)) {
+        for (const entry of candidate) {
+          if (entry !== undefined && entry !== null) return entry;
+        }
+        continue;
+      }
+      return candidate;
+    }
+    return null;
+  };
+
+  const subjectIdCandidate = resolveFirstDefined(
+    material.SubjectID,
+    material.subjectID,
+    material.SubjectId,
+    material.subjectId,
+    material.SubjectIDs,
+    material.subjectIDs,
+    material.SubjectIds,
+    material.subjectIds,
+    subject && typeof subject === "object"
+      ? resolveFirstDefined(
+          subject.SubjectID,
+          subject.subjectID,
+          subject.SubjectId,
+          subject.subjectId,
+          subject.id,
+          subject.Id
+        )
+      : null
+  );
+
+  const normalizeSubjectId = (value) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" && !Number.isNaN(value)) return value;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      return trimmed;
+    }
+    return value;
+  };
+
+  const subjectId = normalizeSubjectId(subjectIdCandidate);
+
+  const resolveSubjectName = () => {
+    const stringCandidates = [
+      material.SubjectName,
+      material.subjectName,
+      material.SubjectTitle,
+      material.subjectTitle,
+      material.SubjectLabel,
+      material.subjectLabel,
+      material.SubjectDescription,
+      material.subjectDescription,
+    ];
+
+    for (const candidate of stringCandidates) {
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+        if (trimmed) return trimmed;
+      }
+    }
+
+    if (typeof subject === "string") {
+      const trimmed = subject.trim();
+      if (trimmed) return trimmed;
+    }
+
+    if (subject && typeof subject === "object") {
+      const nestedCandidates = [
+        subject.SubjectName,
+        subject.subjectName,
+        subject.Name,
+        subject.name,
+        subject.Title,
+        subject.title,
+        subject.Label,
+        subject.label,
+        subject.Description,
+        subject.description,
+      ];
+
+      for (const candidate of nestedCandidates) {
+        if (typeof candidate === "string") {
+          const trimmed = candidate.trim();
+          if (trimmed) return trimmed;
+        }
+      }
+    }
+
+    return "";
+  };
+
+  const subjectName = resolveSubjectName();
+
+  const resolveSubjectCode = () => {
+    const stringCandidates = [
+      material.SubjectCode,
+      material.subjectCode,
+      material.SubjectShortCode,
+      material.subjectShortCode,
+      material.SubjectAbbreviation,
+      material.subjectAbbreviation,
+    ];
+
+    for (const candidate of stringCandidates) {
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+        if (trimmed) return trimmed;
+      }
+    }
+
+    if (subject && typeof subject === "object") {
+      const nestedCandidates = [
+        subject.SubjectCode,
+        subject.subjectCode,
+        subject.Code,
+        subject.code,
+        subject.ShortCode,
+        subject.shortCode,
+        subject.Abbreviation,
+        subject.abbreviation,
+      ];
+
+      for (const candidate of nestedCandidates) {
+        if (typeof candidate === "string") {
+          const trimmed = candidate.trim();
+          if (trimmed) return trimmed;
+        }
+      }
+    }
+
+    return "";
+  };
+
+  const subjectCode = resolveSubjectCode();
+
   const resolvedId =
     material.MaterialID ??
     material.materialID ??
@@ -147,6 +357,12 @@ const mapMaterial = (material) => {
     isVisible,
     IsVisible: isVisible,
     raw: material,
+    subjectId,
+    SubjectID: subjectId,
+    subjectName,
+    SubjectName: subjectName,
+    subjectCode,
+    SubjectCode: subjectCode,
   };
 
   return materialRecord;
@@ -398,6 +614,53 @@ export const getCourseMaterialsAll = async (courseId) => {
   }
 };
 
+export const getCourseMaterialsBySubject = async (courseId, subjectId) => {
+  const resolvedCourse = resolveIdentifier(courseId);
+  const resolvedSubject = resolveIdentifier(subjectId);
+
+  if (!resolvedCourse) return [];
+  if (!resolvedSubject) return [];
+
+  const candidateEndpoints = [
+    `${RESOURCE_BASE}/GetMatbyCourseid?courseid=${encodeURIComponent(
+      resolvedCourse
+    )}&SubjectID=${encodeURIComponent(resolvedSubject)}`,
+    // alternative casing/fallbacks
+    `${RESOURCE_BASE}/GetMatbyCourseid?courseid=${encodeURIComponent(
+      resolvedCourse
+    )}&subjectId=${encodeURIComponent(resolvedSubject)}`,
+    `${RESOURCE_BASE}/getmatbycourseid?courseid=${encodeURIComponent(
+      resolvedCourse
+    )}&SubjectID=${encodeURIComponent(resolvedSubject)}`,
+  ];
+
+  for (const endpoint of candidateEndpoints) {
+    try {
+      const materials = await fetchMaterials(endpoint);
+      return materials.filter(
+        (m) => String(m.courseId) === String(resolvedCourse)
+      );
+    } catch (error) {
+      if (isNotFound(error)) return [];
+      console.warn(`Course-by-subject endpoint failed (${endpoint})`, error);
+    }
+  }
+
+  // Fallback: load all materials for course and filter by subject
+  try {
+    const all = await getCourseMaterialsAll(resolvedCourse);
+    return all.filter(
+      (m) =>
+        String(m.SubjectID ?? m.subjectId ?? m.subjectID ?? m.subjectId) ===
+        String(resolvedSubject)
+    );
+  } catch (error) {
+    if (isNotFound(error)) return [];
+    console.error("Failed to load course materials by subject", error);
+    throw error;
+  }
+};
+
 export const getAllMaterials = async () => {
   try {
     // Prefer explicit "all" endpoint if available on server
@@ -518,6 +781,21 @@ const mapMaterialPayload = (materialData) => {
       materialData.fileType ??
       materialData.type ??
       undefined,
+    SubjectID:
+      materialData.SubjectID ??
+      materialData.subjectID ??
+      materialData.SubjectId ??
+      materialData.subjectId ??
+      materialData.subjectId ??
+      materialData.Subject ??
+      materialData.subject ??
+      undefined,
+    SubjectName:
+      materialData.SubjectName ??
+      materialData.subjectName ??
+      materialData.SubjectTitle ??
+      materialData.subjectTitle ??
+      undefined,
     UploadDate:
       materialData.UploadDate ??
       materialData.uploadDate ??
@@ -536,7 +814,7 @@ const mapMaterialPayload = (materialData) => {
   );
 };
 
-export const uploadMaterial = async (materialData) => {
+export const uploadMaterial = async (materialData, file) => {
   try {
     const payload = mapMaterialPayload(materialData);
     if (!payload.UploadDate) {
@@ -546,6 +824,42 @@ export const uploadMaterial = async (materialData) => {
       payload.IsVisible = true;
     }
 
+    // If a File/Blob is provided, send multipart/form-data to server endpoint
+    if (file) {
+      const form = new FormData();
+      // Append expected fields
+      if (payload.CourseID !== undefined)
+        form.append("CourseID", String(payload.CourseID));
+      if (payload.TeacherID !== undefined)
+        form.append("TeacherID", String(payload.TeacherID));
+      if (payload.SubjectID !== undefined)
+        form.append("SubjectID", String(payload.SubjectID));
+      if (payload.Title !== undefined)
+        form.append("Title", String(payload.Title));
+      if (payload.Description !== undefined)
+        form.append("Description", String(payload.Description));
+      // include fallback fields
+      if (payload.FileType !== undefined)
+        form.append("FileType", String(payload.FileType));
+      if (payload.IsVisible !== undefined)
+        form.append("IsVisible", String(payload.IsVisible));
+      form.append("file", file, file.name || "upload");
+
+      // Post to PostStudyMaterial endpoint which expects multipart form data
+      const response = await axios.post(
+        `${RESOURCE_BASE}/PostStudyMaterial`,
+        form,
+        {
+          headers: {
+            // Let browser set multipart boundary header
+          },
+        }
+      );
+
+      return mapMaterial(response.data) ?? response.data;
+    }
+
+    // Fallback: send JSON payload to legacy endpoint
     const response = await axios.post(RESOURCE_BASE, payload);
     return mapMaterial(response.data) ?? response.data;
   } catch (error) {

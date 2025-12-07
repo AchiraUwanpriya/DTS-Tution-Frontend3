@@ -61,6 +61,7 @@ import {
   FiSearch,
   FiCheckCircle,
   FiBook,
+  FiLayers,
   FiChevronRight,
   FiEdit,
   FiTrash2,
@@ -3904,6 +3905,45 @@ const CourseView = () => {
               <p className="text-gray-900 dark:text-white">
                 {course.description || "No description"}
               </p>
+              {classStatsEntries.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {classStatsEntries.map((entry) => {
+                    const isActiveChip =
+                      showClassStatsPanel && selectedClassKey === entry.key;
+                    return (
+                      <button
+                        key={entry.key}
+                        type="button"
+                        onClick={() => handleClassChipClick(entry.key)}
+                        aria-pressed={isActiveChip}
+                        className={`px-2 py-1 text-xs font-medium rounded-full border transition-colors duration-150 transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-indigo-500 ${
+                          isActiveChip
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-indigo-50 hover:border-indigo-400 hover:text-indigo-700 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:border-indigo-400 dark:hover:text-indigo-300"
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <FiLayers
+                            className={`w-3 h-3 ${
+                              isActiveChip
+                                ? "text-white"
+                                : "text-indigo-600 dark:text-indigo-300"
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <span>{entry.label}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-gray-900 dark:text-white">
+                  {formattedSubjects && String(formattedSubjects).trim()
+                    ? formattedSubjects
+                    : "No classes assigned"}
+                </p>
+              )}
             </div>
 
             {/* Academic Year */}

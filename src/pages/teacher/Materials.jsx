@@ -7,6 +7,7 @@ import {
 } from "../../services/courseService";
 import {
   getCourseMaterialsAll,
+  getCourseMaterialsBySubject,
   updateMaterial,
   getMaterialById,
 } from "../../services/materialService";
@@ -77,6 +78,150 @@ const computeMaterialCounts = (materials = []) => {
   return { active, inactive };
 };
 
+const resolveSubjectId = (material) => {
+  const candidate =
+    material?.subjectId ??
+    material?.SubjectID ??
+    material?.SubjectId ??
+    material?.subjectID ??
+    material?.raw?.SubjectID ??
+    material?.raw?.SubjectId ??
+    material?.raw?.subjectID ??
+    material?.raw?.subjectId ??
+    material?.raw?.Subject?.SubjectID ??
+    material?.raw?.Subject?.SubjectId ??
+    material?.raw?.Subject?.subjectID ??
+    material?.raw?.Subject?.subjectId ??
+    material?.raw?.Class?.SubjectID ??
+    material?.raw?.Class?.SubjectId ??
+    material?.raw?.Class?.subjectID ??
+    material?.raw?.Class?.subjectId ??
+    material?.raw?.SubjectDetails?.SubjectID ??
+    material?.raw?.SubjectDetails?.SubjectId ??
+    material?.raw?.SubjectDetails?.subjectID ??
+    material?.raw?.SubjectDetails?.subjectId ??
+    null;
+
+  if (candidate === null || candidate === undefined) return null;
+  const asString = String(candidate).trim();
+  return asString ? asString : null;
+};
+
+const resolveSubjectName = (material) => {
+  const candidateStrings = [
+    material?.subjectName,
+    material?.SubjectName,
+    material?.subjectTitle,
+    material?.SubjectTitle,
+    material?.subjectLabel,
+    material?.SubjectLabel,
+    material?.subjectDescription,
+    material?.SubjectDescription,
+    material?.subjectCode,
+    material?.SubjectCode,
+    material?.raw?.SubjectName,
+    material?.raw?.subjectName,
+  ];
+
+  for (const value of candidateStrings) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+
+  const subjectObjects = [
+    material?.subject,
+    material?.Subject,
+    material?.raw?.Subject,
+    material?.raw?.subject,
+    material?.raw?.SubjectDetails,
+    material?.raw?.subjectDetails,
+    material?.raw?.Class,
+    material?.raw?.class,
+  ];
+
+  for (const subject of subjectObjects) {
+    if (typeof subject === "string") {
+      const trimmed = subject.trim();
+      if (trimmed) return trimmed;
+      continue;
+    }
+
+    if (subject && typeof subject === "object") {
+      const nestedCandidates = [
+        subject.SubjectName,
+        subject.subjectName,
+        subject.Name,
+        subject.name,
+        subject.Title,
+        subject.title,
+        subject.Label,
+        subject.label,
+        subject.Description,
+        subject.description,
+        subject.Code,
+        subject.code,
+      ];
+      for (const value of nestedCandidates) {
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (trimmed) return trimmed;
+        }
+      }
+    }
+  }
+
+  return "";
+};
+
+const DEFAULT_SUBJECT_LABEL = "Uncategorized Subject";
+const SUBJECT_UNKNOWN_KEY = "__unknown_subject__";
+
+const groupMaterialsBySubject = (materials = []) => {
+  const list = Array.isArray(materials) ? materials : [];
+  if (!list.length) return [];
+
+  const groups = new Map();
+
+  for (const material of list) {
+    if (!material) continue;
+    const subjectId = resolveSubjectId(material);
+    const resolvedName = resolveSubjectName(material);
+    const subjectName =
+      resolvedName ||
+      (subjectId ? `Subject ${subjectId}` : DEFAULT_SUBJECT_LABEL);
+    const key = subjectId
+      ? `id:${subjectId}`
+      : resolvedName
+      ? `name:${resolvedName.toLowerCase()}`
+      : SUBJECT_UNKNOWN_KEY;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        subjectId: subjectId,
+        subjectName,
+        subjectKey: key,
+        materials: [],
+      });
+    }
+
+    groups.get(key).materials.push(material);
+  }
+
+  const compareGroups = (a, b) => {
+    const isAUnknown = a.subjectKey === SUBJECT_UNKNOWN_KEY;
+    const isBUnknown = b.subjectKey === SUBJECT_UNKNOWN_KEY;
+    if (isAUnknown && !isBUnknown) return 1;
+    if (!isAUnknown && isBUnknown) return -1;
+    const nameA = (a.subjectName || DEFAULT_SUBJECT_LABEL).toLowerCase();
+    const nameB = (b.subjectName || DEFAULT_SUBJECT_LABEL).toLowerCase();
+    return nameA.localeCompare(nameB);
+  };
+
+  return Array.from(groups.values()).sort(compareGroups);
+};
+
 const TeacherMaterials = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -109,6 +254,55 @@ const TeacherMaterials = () => {
     () => computeMaterialCounts(materials || []),
     [materials]
   );
+
+  const groupedSingleMaterials = useMemo(
+    () => ({
+      active: groupMaterialsBySubject(activeMaterials),
+      inactive: groupMaterialsBySubject(inactiveMaterials),
+    }),
+    [activeMaterials, inactiveMaterials]
+  );
+
+  const displayedSingleMaterials =
+    activeTab === "active" ? activeMaterials : inactiveMaterials;
+  const displayedSingleGroups = groupedSingleMaterials[activeTab] ?? [];
+
+  const renderSingleMaterialActions = (material) => {
+    const materialId = resolveMaterialId(material);
+    if (activeTab === "active") {
+      const removing = isRemoving(materialId);
+      return (
+        <button
+          type="button"
+          onClick={() => handleRemoveMaterial(material, id)}
+          disabled={removing}
+          className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+            removing
+              ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+              : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-200 dark:hover:bg-red-900/60"
+          }`}
+        >
+          {removing ? "Removing..." : "Remove"}
+        </button>
+      );
+    }
+
+    const restoring = isRestoring(materialId);
+    return (
+      <button
+        type="button"
+        onClick={() => handleRestoreMaterial(material, id)}
+        disabled={restoring}
+        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+          restoring
+            ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+            : "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-200 dark:hover:bg-green-900/60"
+        }`}
+      >
+        {restoring ? "Restoring..." : "Restore"}
+      </button>
+    );
+  };
 
   const setRemovingFlag = (materialId, value) => {
     if (!materialId) return;
@@ -205,40 +399,40 @@ const TeacherMaterials = () => {
             }));
             setCoursesWithMaterials(grouped || []);
             // Kick off lightweight count requests so headers can show material counts immediately
-            (grouped || []).forEach(async (entry) => {
-              const cid = String(
-                entry.course.id ??
-                  entry.course.CourseID ??
-                  entry.course.CourseId ??
-                  entry.course.courseId ??
-                  ""
-              );
-              try {
-                const mats = await getCourseMaterialsAll(cid);
-                const counts = computeMaterialCounts(mats);
-                setCoursesWithMaterials((prev) =>
-                  prev.map((e) => {
-                    const idStr = String(
-                      e.course.id ??
-                        e.course.CourseID ??
-                        e.course.courseId ??
-                        ""
-                    );
-                    if (idStr === cid) {
-                      // Only set the counts here; keep materials null so toggle still triggers detailed load
-                      return {
-                        ...e,
-                        materialCounts: counts,
-                      };
-                    }
-                    return e;
-                  })
-                );
-              } catch (err) {
-                // ignore individual failures; count will remain null
-                // console.debug(`Failed to fetch count for course ${cid}`, err);
-              }
-            });
+            // (grouped || []).forEach(async (entry) => {
+            //   const cid = String(
+            //     entry.course.id ??
+            //       entry.course.CourseID ??
+            //       entry.course.CourseId ??
+            //       entry.course.courseId ??
+            //       ""
+            //   );
+            //   try {
+            //     const mats = await getCourseMaterialsAll(cid);
+            //     const counts = computeMaterialCounts(mats);
+            //     setCoursesWithMaterials((prev) =>
+            //       prev.map((e) => {
+            //         const idStr = String(
+            //           e.course.id ??
+            //             e.course.CourseID ??
+            //             e.course.courseId ??
+            //             ""
+            //         );
+            //         if (idStr === cid) {
+            //           // Only set the counts here; keep materials null so toggle still triggers detailed load
+            //           return {
+            //             ...e,
+            //             materialCounts: counts,
+            //           };
+            //         }
+            //         return e;
+            //       })
+            //     );
+            //   } catch (err) {
+            //     // ignore individual failures; count will remain null
+            //     // console.debug(`Failed to fetch count for course ${cid}`, err);
+            //   }
+            // });
           }
         }
       } catch (error) {
@@ -347,6 +541,139 @@ const TeacherMaterials = () => {
     setModalCourseId(null);
   };
 
+  // Refresh materials for a given course/subject when an upload occurs elsewhere
+  const refreshCourseMaterialsBySubject = async (
+    courseIdToRefresh,
+    subjectIdToRefresh
+  ) => {
+    if (!courseIdToRefresh) return;
+    try {
+      const cid = String(courseIdToRefresh);
+      let fetched = [];
+
+      if (subjectIdToRefresh) {
+        try {
+          fetched = await getCourseMaterialsBySubject(cid, subjectIdToRefresh);
+        } catch (err) {
+          fetched = [];
+        }
+      } else {
+        try {
+          fetched = await getCourseMaterialsAll(cid);
+        } catch (err) {
+          fetched = [];
+        }
+      }
+
+      // If viewing single course, merge into `materials`
+      if (id && String(id) === String(cid)) {
+        setMaterials((prev) => {
+          const prevList = Array.isArray(prev) ? [...prev] : [];
+          const keep = prevList.filter((m) => {
+            const sid = resolveSubjectId(m) ?? null;
+            return String(sid) !== String(subjectIdToRefresh);
+          });
+
+          const combined = [
+            ...(Array.isArray(fetched) ? fetched : []),
+            ...keep,
+          ];
+          const seen = new Set();
+          return combined.filter((m) => {
+            const mid = resolveMaterialId(m) ?? m?.id ?? null;
+            const key = mid != null ? String(mid) : JSON.stringify(m);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        });
+        return;
+      }
+
+      // For overview, update the specific course entry
+      setCoursesWithMaterials((prev) =>
+        prev.map((entry) => {
+          const cidEntry = resolveCourseId(entry.course);
+          if (String(cidEntry) !== String(cid)) return entry;
+
+          const existing = Array.isArray(entry.materials)
+            ? entry.materials
+            : null;
+
+          if (!existing) {
+            return {
+              ...entry,
+              materials: Array.isArray(fetched) ? fetched : [],
+              materialCounts: computeMaterialCounts(
+                Array.isArray(fetched) ? fetched : []
+              ),
+            };
+          }
+
+          const kept = existing.filter((m) => {
+            const sid = resolveSubjectId(m) ?? null;
+            return String(sid) !== String(subjectIdToRefresh);
+          });
+
+          const combined = [
+            ...(Array.isArray(fetched) ? fetched : []),
+            ...kept,
+          ];
+          const seen = new Set();
+          const dedup = combined.filter((m) => {
+            const mid = resolveMaterialId(m) ?? m?.id ?? null;
+            const key = mid != null ? String(mid) : JSON.stringify(m);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+
+          return {
+            ...entry,
+            materials: dedup,
+            materialCounts: computeMaterialCounts(dedup),
+          };
+        })
+      );
+    } catch (err) {
+      console.warn(
+        "Failed to refresh materials for",
+        courseIdToRefresh,
+        subjectIdToRefresh,
+        err
+      );
+    }
+  };
+
+  useEffect(() => {
+    const handler = (ev) => {
+      try {
+        const detail = ev?.detail ?? {};
+        const courseId = detail.courseId;
+        const subjectId = detail.subjectId;
+        if (!courseId) return;
+        refreshCourseMaterialsBySubject(courseId, subjectId);
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    if (typeof window !== "undefined" && window && window.addEventListener) {
+      window.addEventListener("studyMaterial:uploaded", handler);
+    }
+
+    return () => {
+      if (
+        typeof window !== "undefined" &&
+        window &&
+        window.removeEventListener
+      ) {
+        window.removeEventListener("studyMaterial:uploaded", handler);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, coursesWithMaterials]);
+
   const toggleCourse = async (courseEntry) => {
     const cid = String(
       courseEntry.course.id ??
@@ -368,15 +695,71 @@ const TeacherMaterials = () => {
       return { ...prev, [cid]: "active" };
     });
 
-    // If materials not loaded yet, fetch them
+    // If materials not loaded yet, fetch them. Try per-subject endpoint first when course subjects are available.
     if (!courseEntry.materials || courseEntry.materials === null) {
       setCourseLoading((s) => ({ ...s, [cid]: true }));
       try {
-        const mats = await getCourseMaterialsAll(cid);
-        const normalized = Array.isArray(mats) ? mats : [];
-        const counts = computeMaterialCounts(normalized);
+        // Attempt to fetch course details to discover subjects
+        let courseDetails = null;
+        try {
+          courseDetails = await getCourseDetails(cid);
+        } catch (err) {
+          courseDetails = null;
+        }
+
+        const subjectIds =
+          (courseDetails &&
+            (courseDetails.subjectIds ??
+              courseDetails.SubjectIDs ??
+              courseDetails.SubjectIds ??
+              courseDetails.subjectIDs)) ||
+          [];
+
+        let merged = [];
+
+        if (Array.isArray(subjectIds) && subjectIds.length) {
+          // Fetch per-subject materials in parallel
+          const subjectIdStrings = subjectIds.map((s) => String(s));
+          const fetches = subjectIdStrings.map((sid) =>
+            getCourseMaterialsBySubject(cid, sid).catch(() => [])
+          );
+
+          // Also fetch full course materials as fallback to include un-categorized items
+          const allPromise = getCourseMaterialsAll(cid).catch(() => []);
+
+          const results = await Promise.all([Promise.all(fetches), allPromise]);
+          const perSubjectArrays = results[0] || [];
+          const allMaterials = Array.isArray(results[1]) ? results[1] : [];
+
+          // Flatten subject arrays and dedupe by material id
+          const seen = new Set();
+          for (const arr of perSubjectArrays) {
+            for (const m of Array.isArray(arr) ? arr : []) {
+              const mid = resolveMaterialId(m) ?? m?.id ?? null;
+              const key = mid != null ? String(mid) : JSON.stringify(m);
+              if (!seen.has(key)) {
+                seen.add(key);
+                merged.push(m);
+              }
+            }
+          }
+
+          // Add any materials from allMaterials that weren't included (e.g., no SubjectID)
+          for (const m of Array.isArray(allMaterials) ? allMaterials : []) {
+            const mid = resolveMaterialId(m) ?? m?.id ?? null;
+            const key = mid != null ? String(mid) : JSON.stringify(m);
+            if (!seen.has(key)) {
+              seen.add(key);
+              merged.push(m);
+            }
+          }
+        } else {
+          // No subjects known -> fallback to previous behavior
+          const mats = await getCourseMaterialsAll(cid);
+          merged = Array.isArray(mats) ? mats : [];
+        }
+
         // hydrate removed materials for this course (stored locally)
-        let merged = [...normalized];
         try {
           const storedRaw = localStorage.getItem("removedMaterials");
           const store = storedRaw ? JSON.parse(storedRaw) : {};
@@ -762,49 +1145,30 @@ const TeacherMaterials = () => {
                 {removeError}
               </div>
             )}
-
-            <MaterialList
-              materials={
-                activeTab === "active" ? activeMaterials : inactiveMaterials
-              }
-              renderActions={(material) => {
-                const materialId = resolveMaterialId(material);
-                if (activeTab === "active") {
-                  const removing = isRemoving(materialId);
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMaterial(material, id)}
-                      disabled={removing}
-                      className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                        removing
-                          ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                          : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-200 dark:hover:bg-red-900/60"
-                      }`}
-                    >
-                      {removing ? "Removing..." : "Remove"}
-                    </button>
-                  );
-                }
-
-                // inactive tab -> show Restore button
-                const restoring = isRestoring(materialId);
-                return (
-                  <button
-                    type="button"
-                    onClick={() => handleRestoreMaterial(material, id)}
-                    disabled={restoring}
-                    className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                      restoring
-                        ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                        : "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-200 dark:hover:bg-green-900/60"
-                    }`}
-                  >
-                    {restoring ? "Restoring..." : "Restore"}
-                  </button>
-                );
-              }}
-            />
+            {displayedSingleGroups.length ? (
+              displayedSingleGroups.map((group) => (
+                <div key={group.subjectKey} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                      {group.subjectName}
+                    </h3>
+                    <span className="text-xs font-medium text-indigo-600 dark:text-indigo-300">
+                      {group.materials.length} material
+                      {group.materials.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <MaterialList
+                    materials={group.materials}
+                    renderActions={renderSingleMaterialActions}
+                  />
+                </div>
+              ))
+            ) : (
+              <MaterialList
+                materials={displayedSingleMaterials}
+                renderActions={renderSingleMaterialActions}
+              />
+            )}
           </div>
         </>
       ) : (
@@ -847,6 +1211,44 @@ const TeacherMaterials = () => {
                   );
                   const displayedMaterials =
                     currentTab === "inactive" ? inactiveList : activeList;
+                  const renderCourseMaterialActions = (material) => {
+                    const materialId = resolveMaterialId(material);
+                    if (currentTab === "active") {
+                      const removing = isRemoving(materialId);
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMaterial(material, cid)}
+                          disabled={removing}
+                          className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                            removing
+                              ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                              : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-200 dark:hover:bg-red-900/60"
+                          }`}
+                        >
+                          {removing ? "Removing..." : "Remove"}
+                        </button>
+                      );
+                    }
+
+                    const restoring = isRestoring(materialId);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreMaterial(material, cid)}
+                        disabled={restoring}
+                        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                          restoring
+                            ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                            : "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-200 dark:hover:bg-green-900/60"
+                        }`}
+                      >
+                        {restoring ? "Restoring..." : "Restore"}
+                      </button>
+                    );
+                  };
+                  const subjectGroups =
+                    groupMaterialsBySubject(displayedMaterials);
 
                   return (
                     <div
@@ -928,51 +1330,37 @@ const TeacherMaterials = () => {
                                 </div>
                               </div>
 
-                              <MaterialList
-                                materials={displayedMaterials}
-                                renderActions={(material) => {
-                                  const materialId =
-                                    resolveMaterialId(material);
-                                  if (currentTab === "active") {
-                                    const removing = isRemoving(materialId);
-                                    return (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleRemoveMaterial(material, cid)
-                                        }
-                                        disabled={removing}
-                                        className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                                          removing
-                                            ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                                            : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-200 dark:hover:bg-red-900/60"
-                                        }`}
-                                      >
-                                        {removing ? "Removing..." : "Remove"}
-                                      </button>
-                                    );
-                                  }
-
-                                  // inactive -> show restore
-                                  const restoring = isRestoring(materialId);
-                                  return (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleRestoreMaterial(material, cid)
+                              {subjectGroups.length ? (
+                                subjectGroups.map((group) => (
+                                  <div
+                                    key={group.subjectKey}
+                                    className="space-y-3"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                        {group.subjectName}
+                                      </h4>
+                                      <span className="text-xs font-medium text-indigo-600 dark:text-indigo-300">
+                                        {group.materials.length} material
+                                        {group.materials.length === 1
+                                          ? ""
+                                          : "s"}
+                                      </span>
+                                    </div>
+                                    <MaterialList
+                                      materials={group.materials}
+                                      renderActions={
+                                        renderCourseMaterialActions
                                       }
-                                      disabled={restoring}
-                                      className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                                        restoring
-                                          ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                                          : "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-200 dark:hover:bg-green-900/60"
-                                      }`}
-                                    >
-                                      {restoring ? "Restoring..." : "Restore"}
-                                    </button>
-                                  );
-                                }}
-                              />
+                                    />
+                                  </div>
+                                ))
+                              ) : (
+                                <MaterialList
+                                  materials={displayedMaterials}
+                                  renderActions={renderCourseMaterialActions}
+                                />
+                              )}
                             </>
                           )}
                         </div>

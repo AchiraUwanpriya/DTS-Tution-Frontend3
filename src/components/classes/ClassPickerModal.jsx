@@ -123,7 +123,6 @@ const ClassPickerModal = ({
                 return null;
               }
               const isSelected = selectedIds.includes(id);
-              const metaLines = renderOptionMeta(option);
               return (
                 <label
                   key={id}
@@ -139,18 +138,10 @@ const ClassPickerModal = ({
                     checked={isSelected}
                     onChange={() => handleToggle(id)}
                   />
-                  <div className="flex flex-col gap-1 text-sm">
+                  <div className="text-sm">
                     <span className="font-medium text-gray-900 dark:text-gray-100">
                       {option.label || `Class ${id}`}
                     </span>
-                    {metaLines.map((line, index) => (
-                      <span
-                        key={`${id}-meta-${index}`}
-                        className="text-xs text-gray-500 dark:text-gray-400"
-                      >
-                        {line}
-                      </span>
-                    ))}
                   </div>
                 </label>
               );

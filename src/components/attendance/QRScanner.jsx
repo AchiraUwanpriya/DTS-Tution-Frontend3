@@ -68,6 +68,7 @@ const QRScanner = () => {
   const [scheduleStatus, setScheduleStatus] = useState("idle");
   const [scheduleError, setScheduleError] = useState("");
   const [selectedScheduleId, setSelectedScheduleId] = useState("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState("");
 
   // Keep session end time in sync with start time unless the end was manually edited
   const computeEndFromStart = (start) => {
@@ -163,6 +164,40 @@ const QRScanner = () => {
       schedule?.raw?.courseID ??
       schedule?.raw?.CourseId ??
       schedule?.raw?.courseId ??
+      null
+    );
+  }, []);
+
+  const resolveScheduleSubjectId = useCallback((schedule) => {
+    if (!schedule || typeof schedule !== "object") return null;
+    return (
+      schedule?.subjectId ??
+      schedule?.SubjectID ??
+      schedule?.subjectID ??
+      schedule?.SubjectId ??
+      schedule?.raw?.SubjectID ??
+      schedule?.raw?.subjectID ??
+      schedule?.raw?.SubjectId ??
+      schedule?.raw?.subjectId ??
+      null
+    );
+  }, []);
+
+  const resolveScheduleSessionId = useCallback((schedule) => {
+    if (!schedule || typeof schedule !== "object") return null;
+    return (
+      schedule?.sessionId ??
+      schedule?.SessionID ??
+      schedule?.sessionID ??
+      schedule?.scheduleId ??
+      schedule?.ScheduleID ??
+      schedule?.scheduleID ??
+      schedule?.raw?.SessionID ??
+      schedule?.raw?.sessionID ??
+      schedule?.raw?.sessionId ??
+      schedule?.raw?.ScheduleID ??
+      schedule?.raw?.scheduleID ??
+      schedule?.raw?.scheduleId ??
       null
     );
   }, []);
@@ -432,18 +467,23 @@ const QRScanner = () => {
 
   const rosterReady = rosterStatus === "success";
   const canScan =
-    isTeacherAttendanceRoute && Boolean(selectedCourseId) && rosterReady;
+    isTeacherAttendanceRoute &&
+    Boolean(selectedScheduleId) &&
+    Boolean(selectedCourseId) &&
+    rosterReady;
 
   const handleScheduleSelect = useCallback(
     (value) => {
       setSelectedScheduleId(value);
       if (!value) {
         setSessionEndModified(false);
+        setSelectedSubjectId("");
         return;
       }
 
       const schedule = scheduleLookup.get(value);
       if (!schedule) {
+        setSelectedSubjectId("");
         return;
       }
 
@@ -453,6 +493,16 @@ const QRScanner = () => {
         setSelectedCourseId((prev) =>
           prev === normalizedCourseId ? prev : normalizedCourseId
         );
+      }
+
+      const resolvedSubjectId = resolveScheduleSubjectId(schedule);
+      if (resolvedSubjectId !== null && resolvedSubjectId !== undefined) {
+        const normalizedSubjectId = String(resolvedSubjectId);
+        setSelectedSubjectId((prev) =>
+          prev === normalizedSubjectId ? prev : normalizedSubjectId
+        );
+      } else {
+        setSelectedSubjectId("");
       }
 
       const normalizeTimeInput = (time) => {
@@ -475,7 +525,7 @@ const QRScanner = () => {
         setSessionEndModified(false);
       }
     },
-    [scheduleLookup, resolveScheduleCourseId]
+    [scheduleLookup, resolveScheduleCourseId, resolveScheduleSubjectId]
   );
 
   useEffect(() => {
@@ -483,6 +533,7 @@ const QRScanner = () => {
     const schedule = scheduleLookup.get(selectedScheduleId);
     if (!schedule) {
       setSelectedScheduleId("");
+      setSelectedSubjectId("");
       return;
     }
     const scheduleCourseId = resolveScheduleCourseId(schedule);
@@ -493,13 +544,31 @@ const QRScanner = () => {
       String(scheduleCourseId) !== String(selectedCourseId)
     ) {
       setSelectedScheduleId("");
+      setSelectedSubjectId("");
+      return;
+    }
+
+    const scheduleSubjectId = resolveScheduleSubjectId(schedule);
+    if (scheduleSubjectId !== null && scheduleSubjectId !== undefined) {
+      const normalized = String(scheduleSubjectId);
+      setSelectedSubjectId((prev) => (prev === normalized ? prev : normalized));
+    } else if (selectedSubjectId) {
+      setSelectedSubjectId("");
     }
   }, [
     selectedScheduleId,
     selectedCourseId,
     scheduleLookup,
     resolveScheduleCourseId,
+    resolveScheduleSubjectId,
+    selectedSubjectId,
   ]);
+
+  useEffect(() => {
+    if (!selectedScheduleId && selectedSubjectId) {
+      setSelectedSubjectId("");
+    }
+  }, [selectedScheduleId, selectedSubjectId]);
 
   const resolveAttendanceDate = useCallback(() => {
     if (selectedDate) {
@@ -655,35 +724,132 @@ const QRScanner = () => {
 
       const payload = parsed && typeof parsed === "object" ? parsed : {};
 
-      const payloadCourseIds = (() => {
-        if (!payload || typeof payload !== "object") {
-          return [];
+      const normalizePayloadId = (value) => {
+        if (value === undefined || value === null) {
+          return null;
         }
 
-        const rawList =
-          payload.courseIds ??
-          payload.CourseIds ??
-          payload.courseIDs ??
-          payload.CourseIDs ??
-          payload.courses ??
-          payload.Courses ??
+        const text = String(value).trim();
+        if (!text) {
+          return null;
+        }
+
+        if (/^-?\d+$/.test(text) && !/^0\d+/.test(text)) {
+          return String(Number(text));
+        }
+
+        return text;
+      };
+
+      const qrEnrollmentMap = (() => {
+        const map = new Map();
+
+        if (!payload || typeof payload !== "object") {
+          return map;
+        }
+
+        const rawEntries =
+          payload.enrollments ??
+          payload.Enrollments ??
+          payload.enrollment ??
+          payload.Enrollment ??
+          payload.enrollmentList ??
+          payload.EnrollmentList ??
           null;
 
-        if (!Array.isArray(rawList)) {
-          return [];
+        if (!Array.isArray(rawEntries)) {
+          return map;
         }
 
-        const normalized = rawList
-          .map((value) => {
-            if (value === undefined || value === null) {
-              return null;
-            }
-            const text = String(value).trim();
-            return text.length ? text : null;
-          })
-          .filter(Boolean);
+        rawEntries.forEach((entry) => {
+          if (!entry || typeof entry !== "object") {
+            return;
+          }
 
-        return Array.from(new Set(normalized));
+          const courseCandidates = [
+            entry.courseId,
+            entry.CourseID,
+            entry.CourseId,
+            entry.courseID,
+            entry.id,
+            entry.Id,
+          ];
+
+          const normalizedCourseId = courseCandidates
+            .map((candidate) => normalizePayloadId(candidate))
+            .find(Boolean);
+
+          if (!normalizedCourseId) {
+            return;
+          }
+
+          const subjectSet = map.get(normalizedCourseId) || new Set();
+
+          const subjectCollections = [
+            entry.subjectIds,
+            entry.SubjectIds,
+            entry.subjectIDs,
+            entry.SubjectIDs,
+            entry.subjects,
+            entry.Subjects,
+          ];
+
+          subjectCollections.forEach((collection) => {
+            if (!collection) {
+              return;
+            }
+
+            if (Array.isArray(collection)) {
+              collection.forEach((subject) => {
+                if (subject && typeof subject === "object") {
+                  const subjectCandidates = [
+                    subject.subjectId,
+                    subject.SubjectID,
+                    subject.SubjectId,
+                    subject.subjectID,
+                    subject.id,
+                    subject.Id,
+                  ];
+
+                  subjectCandidates.forEach((candidate) => {
+                    const normalized = normalizePayloadId(candidate);
+                    if (normalized) {
+                      subjectSet.add(normalized);
+                    }
+                  });
+                  return;
+                }
+
+                const normalized = normalizePayloadId(subject);
+                if (normalized) {
+                  subjectSet.add(normalized);
+                }
+              });
+              return;
+            }
+
+            const normalized = normalizePayloadId(collection);
+            if (normalized) {
+              subjectSet.add(normalized);
+            }
+          });
+
+          map.set(normalizedCourseId, subjectSet);
+        });
+
+        return map;
+      })();
+
+      const qrCourseIds = Array.from(qrEnrollmentMap.keys());
+      const qrSubjectIds = (() => {
+        const subjectSet = new Set();
+        qrEnrollmentMap.forEach((subjects) => {
+          if (!subjects || typeof subjects.forEach !== "function") {
+            return;
+          }
+          subjects.forEach((id) => subjectSet.add(id));
+        });
+        return Array.from(subjectSet);
       })();
 
       const qrType =
@@ -759,14 +925,66 @@ const QRScanner = () => {
         }
       })();
 
+      const activeSchedule = selectedScheduleId
+        ? scheduleLookup.get(selectedScheduleId)
+        : null;
+
+      if (!activeSchedule) {
+        setStatus("error");
+        setMessage(
+          "Selected schedule is no longer available. Please choose a schedule and try again."
+        );
+        setScanError(
+          "The schedule associated with this scan could not be resolved. Re-select the schedule before scanning."
+        );
+        return;
+      }
+
+      const scheduleCourseId = resolveScheduleCourseId(activeSchedule);
+      const scheduleSubjectId = resolveScheduleSubjectId(activeSchedule);
+      const scheduleCourseLabel =
+        activeSchedule?.courseName ??
+        activeSchedule?.CourseName ??
+        activeSchedule?.raw?.CourseName ??
+        activeSchedule?.raw?.courseName ??
+        "";
+      const scheduleSubjectLabel =
+        activeSchedule?.subjectName ??
+        activeSchedule?.SubjectName ??
+        activeSchedule?.raw?.SubjectName ??
+        activeSchedule?.raw?.subjectName ??
+        "";
+
       const resolvedCourseId =
-        selectedCourseId ||
-        payload.courseId ||
-        payload.CourseID ||
-        payload.courseID ||
+        scheduleCourseId ??
+        (selectedCourseId !== undefined && selectedCourseId !== null
+          ? selectedCourseId
+          : null) ??
+        payload.courseId ??
+        payload.CourseID ??
+        payload.CourseId ??
+        payload.courseID ??
         null;
 
-      if (!resolvedCourseId) {
+      const scheduleSessionId = resolveScheduleSessionId(activeSchedule);
+      const parsedSelectedScheduleId = (() => {
+        if (!selectedScheduleId) return null;
+        const trimmed = String(selectedScheduleId).trim();
+        if (!trimmed.length) return null;
+        const numeric = Number(trimmed);
+        return Number.isFinite(numeric) ? numeric : trimmed;
+      })();
+
+      const resolvedSessionIdForRecord =
+        scheduleSessionId ??
+        parsedSelectedScheduleId ??
+        sessionId ??
+        payload.sessionId ??
+        payload.sessionID ??
+        payload.SessionID ??
+        null;
+
+      if (resolvedCourseId === null || resolvedCourseId === undefined) {
         setStatus("error");
         setMessage("Select a schedule before scanning student QR codes.");
         setScanError("Schedule selection is required to record attendance.");
@@ -774,21 +992,129 @@ const QRScanner = () => {
       }
 
       const normalizedCourseId = String(resolvedCourseId).trim();
+      if (!normalizedCourseId) {
+        setStatus("error");
+        setMessage(
+          "A valid course could not be resolved from the selected schedule."
+        );
+        setScanError(
+          "The schedule did not provide a usable course identifier."
+        );
+        return;
+      }
+
+      const resolvedSubjectPreferred =
+        scheduleSubjectId !== null && scheduleSubjectId !== undefined
+          ? scheduleSubjectId
+          : selectedSubjectId || null;
+
+      const resolvedSubjectFallback =
+        payload.subjectId ??
+        payload.SubjectID ??
+        payload.subjectID ??
+        payload.SubjectId ??
+        null;
+
+      const resolvedSubjectId =
+        resolvedSubjectPreferred !== null &&
+        resolvedSubjectPreferred !== undefined
+          ? resolvedSubjectPreferred
+          : resolvedSubjectFallback;
+
+      const normalizedSubjectId =
+        resolvedSubjectId !== null && resolvedSubjectId !== undefined
+          ? String(resolvedSubjectId).trim()
+          : "";
+
+      const qrSubjectsForCourse =
+        normalizedCourseId && qrEnrollmentMap.has(normalizedCourseId)
+          ? new Set(qrEnrollmentMap.get(normalizedCourseId))
+          : new Set();
+
+      if (normalizedCourseId) {
+        if (!qrEnrollmentMap.size || !qrEnrollmentMap.has(normalizedCourseId)) {
+          setStatus("error");
+          setMessage(
+            scheduleCourseLabel
+              ? `Student QR code does not include ${scheduleCourseLabel}.`
+              : "Student QR code does not include the selected course."
+          );
+          setScanError(
+            "The scanned QR does not list the course ID required by the chosen schedule."
+          );
+          try {
+            playBeep(2, 700, 0.14, 0.12);
+          } catch (_) {}
+          return;
+        }
+      }
+
+      if (normalizedSubjectId) {
+        if (
+          !qrSubjectsForCourse.size ||
+          !qrSubjectsForCourse.has(normalizedSubjectId)
+        ) {
+          setStatus("error");
+          setMessage(
+            scheduleSubjectLabel
+              ? `Student QR code does not include ${scheduleSubjectLabel}.`
+              : "Student QR code does not include the selected subject."
+          );
+          setScanError(
+            "The scanned QR does not list the subject ID required by this schedule."
+          );
+          try {
+            playBeep(2, 700, 0.14, 0.12);
+          } catch (_) {}
+          return;
+        }
+      }
+
+      const courseIdSet = new Set(
+        qrCourseIds.map((id) => String(id).trim()).filter(Boolean)
+      );
+      const subjectIdSet = new Set(
+        qrSubjectIds.map((id) => String(id).trim()).filter(Boolean)
+      );
 
       if (
         normalizedCourseId &&
-        payloadCourseIds.length > 0 &&
-        !payloadCourseIds.some((id) => id === normalizedCourseId)
+        courseIdSet.size > 0 &&
+        !courseIdSet.has(normalizedCourseId)
       ) {
         setStatus("error");
-        setMessage("QR code is not valid for the selected course.");
+        setMessage(
+          scheduleCourseLabel
+            ? `Student is not enrolled in ${scheduleCourseLabel}.`
+            : "Student is not enrolled in the selected course."
+        );
         setScanError(
-          "The scanned QR does not list the selected course among the student's enrollments."
+          "The student's enrollment does not include the course linked to the chosen schedule."
         );
         try {
           playBeep(2, 700, 0.14, 0.12);
         } catch (_) {}
         return;
+      }
+
+      if (normalizedSubjectId) {
+        if (!subjectIdSet.size || !subjectIdSet.has(normalizedSubjectId)) {
+          setStatus("error");
+          setMessage(
+            scheduleSubjectLabel
+              ? `Student is not enrolled in ${scheduleSubjectLabel}.`
+              : "Student is not enrolled in the selected subject."
+          );
+          setScanError(
+            scheduleSubjectLabel
+              ? `The student's enrollments do not include ${scheduleSubjectLabel}.`
+              : "The student's enrollments do not include the subject required by this schedule."
+          );
+          try {
+            playBeep(2, 700, 0.14, 0.12);
+          } catch (_) {}
+          return;
+        }
       }
 
       const resolvedName =
@@ -846,14 +1172,12 @@ const QRScanner = () => {
 
       try {
         const record = await recordAttendance({
-          sessionId:
-            sessionId ??
-            payload.sessionId ??
-            payload.sessionID ??
-            payload.SessionID ??
-            null,
+          sessionId: resolvedSessionIdForRecord,
           studentId: resolvedStudentId,
           courseId: resolvedCourseId,
+          CourseID: resolvedCourseId,
+          subjectId: resolvedSubjectId ?? scheduleSubjectId ?? undefined,
+          SubjectID: resolvedSubjectId ?? scheduleSubjectId ?? undefined,
           teacherId,
           // the teacher's selected date represents the session date
           attendanceDate: sessionIso,
@@ -919,10 +1243,20 @@ const QRScanner = () => {
       } catch (error) {
         console.error("Failed to record attendance", error);
         setStatus("error");
-        setMessage("Failed to record attendance. Please try again.");
-        setScanError(
-          "Recording attendance failed. Check your connection and retry."
+        const apiMessage =
+          error && typeof error.message === "string" && error.message.trim()
+            ? error.message.trim()
+            : null;
+        setMessage(
+          apiMessage ?? "Failed to record attendance. Please try again."
         );
+        setScanError(
+          apiMessage ??
+            "Recording attendance failed. Check your connection and retry."
+        );
+        try {
+          playBeep(2, 650, 0.16, 0.12);
+        } catch (_) {}
       }
     },
     [
@@ -932,12 +1266,19 @@ const QRScanner = () => {
       rosterStatus,
       rosterError,
       selectedCourseId,
+      selectedScheduleId,
+      selectedSubjectId,
       selectedDate,
       sessionId,
       stopCamera,
       teacherId,
       sessionEndTime,
       sessionStartTime,
+      scheduleLookup,
+      resolveScheduleCourseId,
+      resolveScheduleSubjectId,
+      resolveScheduleSessionId,
+      playBeep,
     ]
   );
 
@@ -1251,7 +1592,7 @@ const QRScanner = () => {
                   {studentDetails.email}
                 </p>
               )}
-              {studentDetails.rollNumber && (
+              {/* {studentDetails.rollNumber && (
                 <p>
                   <span className="font-medium">Roll #:</span>{" "}
                   {studentDetails.rollNumber}
@@ -1262,7 +1603,7 @@ const QRScanner = () => {
                   <span className="font-medium">Grade:</span>{" "}
                   {studentDetails.currentGrade}
                 </p>
-              )}
+              )} */}
             </div>
           )}
         </div>

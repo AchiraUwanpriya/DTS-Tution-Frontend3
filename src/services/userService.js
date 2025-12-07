@@ -524,3 +524,32 @@ export const getStudents = async () => {
   const payload = await response.json();
   return mapUsers(payload);
 };
+
+// Fetch basic user info by ID
+export const getUserBasicInfo = async (userId) => {
+  try {
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
+
+    const response = await fetch(`${API_URL}/BasicInfo/${userId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`User with ID ${userId} not found`);
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching user basic info:", error);
+    throw error;
+  }
+};

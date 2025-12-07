@@ -47,32 +47,6 @@ const resolveDisplayName = (nameProp, user) => {
   return "";
 };
 
-const profileFieldCandidates = (target) => {
-  if (!target || typeof target !== "object") {
-    return [];
-  }
-
-  return [
-    target.profilePicture,
-    target.ProfilePicture,
-    target.profile_photo,
-    target.profilephoto,
-    target.photo,
-    target.Photo,
-    target.photoUrl,
-    target.PhotoUrl,
-    target.photoURL,
-    target.picture,
-    target.Picture,
-    target.avatar,
-    target.Avatar,
-    target.image,
-    target.Image,
-    target.imageUrl,
-    target.ImageUrl,
-  ];
-};
-
 const getProfilePhotoVersion = (target) => {
   if (!target || typeof target !== "object") {
     return null;
@@ -239,30 +213,74 @@ const normalizeToAbsoluteUrl = (value) => {
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
 };
 
+const resolveUserId = (candidate) => {
+  if (!candidate || typeof candidate !== "object") {
+    return "";
+  }
+
+  const visited = new Set();
+  const queue = [candidate];
+  const keys = [
+    "userId",
+    "UserID",
+    "userID",
+    "id",
+    "Id",
+    "ID",
+    "StudentID",
+    "studentID",
+    "studentId",
+    "TeacherID",
+    "teacherID",
+    "teacherId",
+  ];
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || visited.has(current)) {
+      continue;
+    }
+
+    visited.add(current);
+
+    for (const key of keys) {
+      const value = current[key];
+      if (value === undefined || value === null) {
+        continue;
+      }
+
+      const trimmed = toTrimmed(value);
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+
+    const nested = [
+      current.user,
+      current.User,
+      current.UserDetails,
+      current.details,
+      current.profile,
+      current.raw,
+      current.Student,
+      current.Teacher,
+    ];
+
+    for (const target of nested) {
+      if (target && typeof target === "object" && !visited.has(target)) {
+        queue.push(target);
+      }
+    }
+  }
+
+  return "";
+};
+
 const resolvePhotoSource = (srcProp, user) => {
   const userVersion = getProfilePhotoVersion(user);
   const direct = normalizeToAbsoluteUrl(srcProp);
   if (direct) {
     return appendCacheBuster(direct, userVersion);
-  }
-
-  const targets = [];
-  if (user && typeof user === "object") {
-    targets.push(user);
-    if (user.raw && typeof user.raw === "object") {
-      targets.push(user.raw);
-    }
-  }
-
-  for (const target of targets) {
-    const targetVersion = getProfilePhotoVersion(target) ?? userVersion;
-    const candidates = profileFieldCandidates(target);
-    for (const candidate of candidates) {
-      const resolved = normalizeToAbsoluteUrl(candidate);
-      if (resolved) {
-        return appendCacheBuster(resolved, targetVersion);
-      }
-    }
   }
 
   return "";
@@ -284,20 +302,116 @@ const getInitials = (value) => {
   return `${first ?? ""}${last ?? ""}`.toUpperCase();
 };
 
-const Avatar = ({ name, size = "md", src, user, className = "" }) => {
+const profilePictureCache = new Map();
+
+const Avatar = ({
+  name,
+  size = "md",
+  src,
+  user,
+  userId: explicitUserId,
+  className = "",
+}) => {
   const [imageError, setImageError] = useState(false);
+  const [fetchedSrc, setFetchedSrc] = useState("");
 
   const displayName = useMemo(
     () => resolveDisplayName(name, user),
     [name, user]
   );
-  const targetSrc = useMemo(() => resolvePhotoSource(src, user), [src, user]);
+  const directSrc = useMemo(() => resolvePhotoSource(src, user), [src, user]);
+  const userId = useMemo(
+    () => toTrimmed(explicitUserId) || resolveUserId(user),
+    [explicitUserId, user]
+  );
+  const profileVersion = useMemo(() => getProfilePhotoVersion(user), [user]);
+
+  useEffect(() => {
+    if (!userId) {
+      setFetchedSrc("");
+      return;
+    }
+
+    const normalizedVersion = profileVersion ?? null;
+    const cachedEntry = profilePictureCache.get(userId);
+
+    if (cachedEntry && cachedEntry.version === normalizedVersion) {
+      setFetchedSrc(cachedEntry.src);
+      return;
+    }
+
+    if (cachedEntry && cachedEntry.version !== normalizedVersion) {
+      profilePictureCache.delete(userId);
+    }
+
+    setFetchedSrc("");
+
+    let isActive = true;
+    const controller =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
+
+    const loadProfilePhoto = async () => {
+      try {
+        const response = await axios.get(
+          `/Users/ProfilePicture/${encodeURIComponent(userId)}`,
+          controller?.signal ? { signal: controller.signal } : undefined
+        );
+        if (!isActive) {
+          return;
+        }
+
+        const data = response?.data;
+        if (data?.hasPicture && data?.filePath) {
+          const normalized = normalizeToAbsoluteUrl(data.filePath);
+          const withCacheBuster = appendCacheBuster(normalized, profileVersion);
+          profilePictureCache.set(userId, {
+            version: normalizedVersion,
+            src: withCacheBuster,
+          });
+          setFetchedSrc(withCacheBuster);
+          setImageError(false);
+          return;
+        }
+
+        profilePictureCache.set(userId, {
+          version: normalizedVersion,
+          src: "",
+        });
+        setFetchedSrc("");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        if (axios.isCancel?.(error) || error?.code === "ERR_CANCELED") {
+          return;
+        }
+
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Failed to load profile picture", error);
+        }
+
+        setFetchedSrc("");
+      }
+    };
+
+    // Fetch profile picture from the backend whenever the user context changes.
+    loadProfilePhoto();
+
+    return () => {
+      isActive = false;
+      if (controller) {
+        controller.abort();
+      }
+    };
+  }, [userId, profileVersion]);
 
   useEffect(() => {
     setImageError(false);
-  }, [targetSrc]);
+  }, [directSrc, fetchedSrc]);
 
   const sizeKey = sizeClasses[size] ? size : "md";
+  const targetSrc = fetchedSrc || directSrc;
   const showImage = Boolean(targetSrc) && !imageError;
   const initials = useMemo(() => getInitials(displayName), [displayName]);
 
