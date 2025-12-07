@@ -3,7 +3,12 @@ import QRCode from "qrcode";
 import { useAuth } from "../../contexts/AuthContext";
 import { getEnrolledSubjectsByStudent } from "../../services/subjectService";
 
-const StudentQRPass = () => {
+const StudentQRPass = ({
+  showTitle = true,
+  className = "",
+  courseId: _courseId,
+}) => {
+  void _courseId;
   const { user } = useAuth();
   const [qrImage, setQrImage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -200,11 +205,20 @@ const StudentQRPass = () => {
     };
   }, [studentId]);
 
+  const containerClasses = [
+    "flex flex-col items-center space-y-4 p-6 bg-white dark:bg-gray-800 rounded-lg shadow",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="flex flex-col items-center space-y-4 p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-      <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-        Your Attendance QR Code
-      </h3>
+    <div className={containerClasses}>
+      {showTitle && (
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+          Your Attendance QR Code
+        </h3>
+      )}
 
       {isLoading && (
         <div className="text-sm text-gray-500 dark:text-gray-400">
