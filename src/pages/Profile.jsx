@@ -370,7 +370,6 @@
 //             d="M2.25 6.75A2.25 2.25 0 014.5 4.5h3a2.25 2.25 0 012.25 2.25v1.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 004.5 12v0c0 4.556 3.694 8.25 8.25 8.25v0a2.25 2.25 0 002.25-2.25v-1.5A2.25 2.25 0 0012.75 14.25H11.25A2.25 2.25 0 019 12v0"
 // =======
 
-
 // import { useMemo, useState, useEffect } from "react";
 // import { useAuth } from "../contexts/AuthContext";
 // import Avatar from "../components/common/Avatar";
@@ -709,14 +708,14 @@
 //                   </div>
 //                 </div>
 //               </div>
-              
+
 //               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
 //                 {displayName}
 //               </h2>
 //               <p className="text-gray-600 dark:text-gray-400 mb-6">
 //                 {email}
 //               </p>
-              
+
 //               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl p-4 border border-blue-100 dark:border-blue-800/30">
 //                 <div className="flex items-center justify-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">
 //                   <Icon name="badge" className="w-4 h-4" />
@@ -734,7 +733,7 @@
 //                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 text-center">
 //                   Student QR Code
 //                 </h3>
-                
+
 //                 <div className="flex flex-col items-center gap-4">
 //                   {studentQR ? (
 //                     <>
@@ -790,15 +789,15 @@
 
 //               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 //                 {fields.map((field, index) => (
-//                   <div 
+//                   <div
 //                     key={field.key}
 //                     className="group bg-gradient-to-br from-white to-blue-50/50 dark:from-gray-800 dark:to-blue-900/10 rounded-2xl p-6 border border-gray-100 dark:border-gray-700/50 hover:border-blue-200 dark:hover:border-blue-800/50 transition-all duration-300 hover:shadow-md"
 //                   >
 //                     <div className="flex items-start gap-4">
 //                       <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
-//                         <Icon 
-//                           name={field.icon} 
-//                           className="w-5 h-5 text-blue-600 dark:text-blue-400" 
+//                         <Icon
+//                           name={field.icon}
+//                           className="w-5 h-5 text-blue-600 dark:text-blue-400"
 //                         />
 //                       </div>
 //                       <div className="flex-1 min-w-0">
@@ -866,6 +865,7 @@ import Avatar from "../components/common/Avatar";
 import QRCode from "qrcode";
 import { getStudentCourses } from "../services/courseService";
 import { collectCourseIdsForStudent } from "../utils/helpers";
+import { getUserById } from "../services/userService"; //newly added one
 
 // Simple inline SVG icons (no external deps)
 const Icon = ({ name, className = "w-5 h-5" }) => {
@@ -1004,21 +1004,90 @@ const Icon = ({ name, className = "w-5 h-5" }) => {
 const Profile = () => {
   const { user } = useAuth();
 
+  const resolveUserId = (u) =>
+    u?.UserID ??
+    u?.userID ??
+    u?.userId ??
+    u?.id ??
+    u?.Id ??
+    u?.User?.UserID ??
+    u?.User?.id ??
+    null;
+
+  // ⭐ NEW: state to hold the fresh user from API
+  const [fetchedUser, setFetchedUser] = useState(null);
+
+  // ⭐ NEW: fetch user by id when auth user changes
+  useEffect(() => {
+    if (!user) return;
+
+    const id = resolveUserId(user);
+    if (!id) return;
+
+    let cancelled = false;
+
+    const loadUser = async () => {
+      try {
+        const data = await getUserById(id); // <-- here we use getUserById(userId)
+        if (!cancelled) {
+          setFetchedUser(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch user for profile:", err);
+      }
+    };
+
+    loadUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  // ⭐ NEW: this is the unified source of truth for display
+  const effectiveUser = fetchedUser || user;
+
+
+
   const role = user?.userType || user?.role || "student";
+
   const [studentQR, setStudentQR] = useState("");
+
+
+useEffect(() => {
+  if (studentQR) {
+    console.log("🔎 studentQR (raw) =", studentQR);
+  }
+}, [studentQR]);
+  // const studentId = useMemo(() => {
+  //   return (
+  //     user?.StudentID ??
+  //     user?.studentID ??
+  //     user?.studentId ??
+  //     user?.UserID ??
+  //     user?.userID ??
+  //     user?.userId ??
+  //     user?.id ??
+  //     user?.Id ??
+  //     null
+  //   );
+  // }, [user]);
+
   const studentId = useMemo(() => {
+    const u = effectiveUser;
     return (
-      user?.StudentID ??
-      user?.studentID ??
-      user?.studentId ??
-      user?.UserID ??
-      user?.userID ??
-      user?.userId ??
-      user?.id ??
-      user?.Id ??
+      u?.StudentID ??
+      u?.studentID ??
+      u?.studentId ??
+      u?.UserID ??
+      u?.userID ??
+      u?.userId ??
+      u?.id ??
+      u?.Id ??
       null
     );
   }, [user]);
+
   const displayRole =
     role === "admin"
       ? "Administrator"
@@ -1028,19 +1097,24 @@ const Profile = () => {
 
   // Robust fallbacks so the profile shows the logged-in user's actual data
   const rawName = (
-    `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-    user?.name ||
-    user?.fullName ||
-    
+    `${effectiveUser?.firstName || ""} ${
+      effectiveUser?.lastName || ""
+    }`.trim() ||
+    effectiveUser?.name ||
+    effectiveUser?.fullName ||
     ""
   ).trim();
-  const email = user?.email || user?.Email || user?.username || "-";
+  const email =
+    effectiveUser?.email ||
+    effectiveUser?.Email ||
+    effectiveUser?.username ||
+    "-";
   const emailLocal = email && email !== "-" ? String(email).split("@")[0] : "";
   const fullName = (
     rawName ||
     emailLocal ||
-    user?.username ||
-    user?.userName ||
+    effectiveUser?.username ||
+    effectiveUser?.userName ||
     ""
   ).trim();
 
@@ -1050,10 +1124,10 @@ const Profile = () => {
       .replace(/\b\w/, (c) => c.toUpperCase());
   const displayName = capitalize(fullName) || "User";
   const phone =
-    user?.phone ||
-    user?.PhoneNumber ||
-    user?.phoneNumber ||
-    user?.mobile ||
+    effectiveUser?.phone ||
+    effectiveUser?.PhoneNumber ||
+    effectiveUser?.phoneNumber ||
+    effectiveUser?.mobile ||
     "-";
 
   // Pick fields by role without changing the underlying data
@@ -1078,7 +1152,7 @@ const Profile = () => {
         { key: "Role", value: "Administrator", icon: "badge" },
         {
           key: "Department",
-          value: user?.department || "Administration",
+          value: effectiveUser?.department || "Administration",
           icon: "school",
         },
       ];
@@ -1089,7 +1163,7 @@ const Profile = () => {
         { key: "Role", value: "Teacher", icon: "badge" },
         {
           key: "Subject",
-          value: user?.subject || user?.specialty || "-",
+          value: effectiveUser?.subject || effectiveUser?.specialty || "-",
           icon: "school",
         },
       ];
@@ -1100,67 +1174,136 @@ const Profile = () => {
       { key: "Role", value: "Student", icon: "badge" },
       {
         key: "Grade/Year",
-        value: user?.grade || user?.year || "-",
+        value: effectiveUser?.grade || effectiveUser?.year || "-",
         icon: "school",
       },
     ];
-  }, [role, user]);
+  }, [role, effectiveUser]);
 
   // Generate a QR for students only
+  // useEffect(() => {
+  //   let cancelled = false;
+
+  //   const generateStudentQR = async () => {
+  //     if (role !== "student") {
+  //       if (!cancelled) {
+  //         setStudentQR("");
+  //       }
+  //       return;
+  //     }
+
+  //     if (!studentId) {
+  //       if (!cancelled) {
+  //         setStudentQR("");
+  //       }
+  //       return;
+  //     }
+
+  //     try {
+  //       let courses = [];
+
+  //       try {
+  //         const fetched = await getStudentCourses(studentId);
+  //         courses = Array.isArray(fetched) ? fetched : [];
+
+  //         // console.log("Fetched courses for student:", courses);
+  //       } catch (fetchError) {
+  //         console.error("Failed to load courses for profile QR", fetchError);
+  //       }
+
+  //       const courseIds = collectCourseIdsForStudent(courses);
+
+  //       const payload = JSON.stringify({
+  //         studentId: String(studentId),
+  //         courseIds,
+  //       });
+  //       // console.log("Generating QR with payload:", studentId);
+  //       // console.log("This is my payload:", payload );
+
+        
+
+  //       const dataUrl = await QRCode.toDataURL(payload);
+  //       console.log("This is my QR code bitch ", dataUrl);
+        
+      
+
+
+  //       if (!cancelled) {
+         
+  //         setStudentQR(dataUrl);
+          
+          
+  //       }
+  //     } catch (e) {
+  //       console.error("Failed to generate student QR", e);
+  //       if (!cancelled) {
+  //         setStudentQR("");
+  //       }
+  //     }
+  //   };
+
+  //   generateStudentQR();
+
+  //   return () => {
+  //     cancelled = true;
+  //   };
+  // }, [role, studentId]);
+
   useEffect(() => {
-    let cancelled = false;
+  let cancelled = false;
 
-    const generateStudentQR = async () => {
-      if (role !== "student") {
-        if (!cancelled) {
-          setStudentQR("");
-        }
-        return;
-      }
+  const generateStudentQR = async () => {
+    // Only for students
+    if (role !== "student") {
+      if (!cancelled) setStudentQR("");
+      return;
+    }
 
-      if (!studentId) {
-        if (!cancelled) {
-          setStudentQR("");
-        }
-        return;
-      }
+    // Need an ID
+    if (!studentId) {
+      console.warn("🔎 No student ID found for QR");
+      if (!cancelled) setStudentQR("");
+      return;
+    }
+
+    try {
+      let courses = [];
 
       try {
-        let courses = [];
-
-        try {
-          const fetched = await getStudentCourses(studentId);
-          courses = Array.isArray(fetched) ? fetched : [];
-        } catch (fetchError) {
-          console.error("Failed to load courses for profile QR", fetchError);
-        }
-
-        const courseIds = collectCourseIdsForStudent(courses);
-
-        const payload = JSON.stringify({
-          studentId: String(studentId),
-          courseIds,
-        });
-
-        const dataUrl = await QRCode.toDataURL(payload);
-
-        if (!cancelled) {
-          setStudentQR(dataUrl);
-        }
-      } catch (e) {
-        console.error("Failed to generate student QR", e);
-        if (!cancelled) {
-          setStudentQR("");
-        }
+        const fetched = await getStudentCourses(studentId);
+        courses = Array.isArray(fetched) ? fetched : [];
+      } catch (fetchError) {
+        console.error("Failed to load courses for profile QR", fetchError);
       }
-    };
 
-    generateStudentQR();
+      const courseIds = collectCourseIdsForStudent(courses);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [role, studentId]);
+      const payload = JSON.stringify({
+        studentId: String(studentId),
+        courseIds,
+      });
+
+      // // If you want to see actual values:
+      // console.log("📦 QR payload =", payload);
+
+      const dataUrl = await QRCode.toDataURL(payload);
+
+      if (!cancelled) {
+        setStudentQR(dataUrl);
+        // console.log("✅ QR data URL set");
+      }
+    } catch (e) {
+      console.error("Failed to generate student QR", e);
+      if (!cancelled) setStudentQR("");
+    }
+  };
+
+  generateStudentQR();
+
+  return () => {
+    cancelled = true;
+  };
+}, [role, studentId]);
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/20 dark:from-gray-900 dark:via-blue-950/20 dark:to-indigo-950/10 py-8 sm:py-8 px-3 sm:px-4 lg:px-8 font-sans">
@@ -1186,12 +1329,15 @@ const Profile = () => {
           <div className="lg:col-span-3 space-y-4 sm:space-y-5">
             {/* Profile Card */}
             <div className="bg-white/90 dark:bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-lg border border-white/60 dark:border-gray-800/70 p-5 sm:p-6 text-center">
-                 <div className="flex justify-center mb-4 sm:mb-5">
+              <div className="flex justify-center mb-4 sm:mb-5">
                 <div className="relative inline-block">
                   <Avatar
                     name={displayName}
                     user={user}
-                    src={user?.ProfilePicture || user?.profilePicture}
+                    src={
+                      effectiveUser?.ProfilePicture ||
+                      effectiveUser?.profilePicture
+                    }
                     size="xl"
                     className="h-20 w-20 sm:h-24 sm:w-24 ring-4 ring-white/80 dark:ring-gray-800/80 shadow-2xl bg-gradient-to-br from-blue-500 to-indigo-600"
                   />
@@ -1229,7 +1375,8 @@ const Profile = () => {
                 </h3>
 
                 <div className="flex flex-col items-center gap-3 sm:gap-4">
-                  {studentQR ? (
+                  {/* {console.log("👀 render: studentQR truthy?", !!studentQR)} */}
+                  {studentQR ? (    
                     <>
                       <div className="p-3 sm:p-4 bg-white dark:bg-gray-950 rounded-2xl border border-dashed border-blue-200 dark:border-blue-800/60 shadow-inner">
                         <img
@@ -1237,6 +1384,20 @@ const Profile = () => {
                           alt="Student QR Code"
                           className="w-32 h-32 sm:w-40 sm:h-40 mx-auto"
                         />
+
+                        
+
+                        {/* <img
+                          src={studentQR}
+                          alt="Student QR Code"
+                          className="w-32 h-32 sm:w-40 sm:h-40 mx-auto"
+                          onLoad={() =>
+                            console.log("Image loaded successfully")
+                          }
+                          onError={(e) =>
+                            console.error("Image failed to load:", e)
+                          }
+                        /> */}
                       </div>
                       <p className="text-[11px] sm:text-xs md:text-sm text-gray-600 dark:text-gray-400 text-center">
                         Scan this QR code for quick access to your student
@@ -1252,7 +1413,10 @@ const Profile = () => {
                         }.png`}
                         className="w-full inline-flex items-center justify-center gap-2 sm:gap-2.5 px-4 sm:px-5 py-2.5 text-xs sm:text-sm md:text-base font-semibold rounded-xl shadow-md transition-all duration-200 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transform hover:-translate-y-0.5"
                       >
-                        <Icon name="download" className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <Icon
+                          name="download"
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
                         Download QR Code
                       </a>
                     </>
@@ -1387,4 +1551,3 @@ const Profile = () => {
 };
 
 export default Profile;
-
